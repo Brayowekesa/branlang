@@ -1,0 +1,20 @@
+show("--- File I/O Test ---")
+
+mem filename = "my_test_file.txt"
+mem content_to_write = "Hello from BranLang! 🚀\nThe year is " + 2025
+
+show("Writing to file:", filename)
+write_file(filename, content_to_write)
+show("Write complete.")
+show("")
+
+show("Reading from file:", filename)
+mem content_read = read_file(filename)
+
+show("Content read from file was:")
+show("--------------------")
+show(content_read)
+show("--------------------")
+show("")
+
+show("File I/O test complete!")

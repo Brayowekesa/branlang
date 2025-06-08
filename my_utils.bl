@@ -1,0 +1,7 @@
+// This is a utility module.
+// It defines a constant and a helper function.
+
+mem PI = 3.14159
+
+fn square(n):
+  return n * n

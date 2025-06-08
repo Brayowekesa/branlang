@@ -1,0 +1,35 @@
+// BranLang v0.4 - Array Feature Test
+
+show("--- Array Literal & Index Access ---")
+mem my_list = [10, "two", 3.14, true]
+show("The full list is:", my_list)
+show("Item at index 0:", my_list[0])
+show("Item at index 2:", my_list[2])
+show("")
+
+show("--- Index Assignment ---")
+my_list[1] = "zwei"
+show("After update:", my_list)
+show("")
+
+show("--- For-Each Loop ---")
+show("Looping over the list:")
+for item in my_list:
+  show("  - Item:", item)
+show("")
+
+show("--- Built-in Functions ---")
+show("Length of my_list:", len(my_list))
+show("Pushing 99 onto the list...")
+push(my_list, 99)
+show("List is now:", my_list)
+show("Length is now:", len(my_list))
+show("")
+
+mem last_item = pop(my_list)
+show("Popped item:", last_item)
+show("List after pop:", my_list)
+show("Final length:", len(my_list))
+show("")
+
+show("Array tests complete! 🚀")

@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BranLang™ Web IDE</title>
+    <style>
+        :root {
+            --bg-color: #ffffff; --secondary-bg-color: #f7f9fa; --font-color: #24292e; --border-color: #e1e4e8;
+            --header-bg: #ffffff; --button-bg: #2188ff; --button-hover-bg: #0366d6; --run-button-bg: #2a9d8f;
+            --run-button-hover-bg: #248a7f; --output-bg: #f6f8fa; --output-color: #24292e; --thinking-color: #aaa;
+        }
+        body.dark-mode {
+            --bg-color: #0d1117; --secondary-bg-color: #161b22; --font-color: #c9d1d9; --border-color: #30363d;
+            --header-bg: #161b22; --button-bg: #238636; --button-hover-bg: #2ea043; --run-button-bg: #e34c26;
+            --run-button-hover-bg: #f16529; --output-bg: #010409; --output-color: #c9d1d9; --thinking-color: #555;
+        }
+        body { font-family: -apple-system, sans-serif; margin: 0; background-color: var(--bg-color); color: var(--font-color); transition: background-color 0.2s, color 0.2s; }
+        .header { display: flex; align-items: center; justify-content: space-between; padding: 10px 20px; background-color: var(--header-bg); border-bottom: 1px solid var(--border-color); }
+        .header h1 { font-size: 24px; margin: 0; }
+        .theme-switcher { display: flex; align-items: center; gap: 10px; }
+        .switch { position: relative; display: inline-block; width: 50px; height: 26px; }
+        .switch input { display: none; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 34px; }
+        .slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 4px; bottom: 4px; background-color: white; transition: .4s; border-radius: 50%; }
+        input:checked + .slider { background-color: #2196F3; }
+        input:checked + .slider:before { transform: translateX(24px); }
+        .ide-container { display: flex; height: calc(100vh - 61px); }
+        .editor-pane, .io-pane { flex: 1; padding: 15px; display: flex; flex-direction: column; overflow-y: auto; }
+        .editor-pane { border-right: 1px solid var(--border-color); }
+        .editor-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+        .editor-header h2 { margin: 0; font-size: 18px; font-weight: 500; }
+        #run-button { padding: 8px 20px; font-size: 16px; font-weight: bold; background-color: var(--run-button-bg); color: white; border: none; border-radius: 6px; cursor: pointer; }
+        #run-button:hover { background-color: var(--run-button-hover-bg); }
+        .CodeMirror { border: 1px solid var(--border-color); border-radius: 6px; height: 100%; }
+        .io-box { display: flex; flex-direction: column; height: 50%; }
+        .io-box h3 { margin-top: 0; margin-bottom: 10px; font-weight: 500; }
+        #stdin-area, #output { flex-grow: 1; width: 100%; box-sizing: border-box; background-color: var(--output-bg); color: var(--output-color); border: 1px solid var(--border-color); border-radius: 6px; padding: 10px; font-family: 'Courier New', monospace; }
+        #stdin-area { resize: none; margin-bottom: 15px; }
+        #output { white-space: pre-wrap; word-wrap: break-word; }
+        #output.error { color: #ff5555; }
+        .thinking-widget { font-style: italic; color: var(--thinking-color); }
+    </style>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/theme/material-darker.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/python/python.min.js"></script>
+</head>
+<body>
+    <header class="header"><h1>BranLang™ IDE</h1><div class="theme-switcher"><span>Dark Mode</span><label class="switch"><input type="checkbox" id="theme-toggle"><span class="slider"></span></label></div></header>
+    <main class="ide-container">
+        <div class="editor-pane"><div class="editor-header"><h2>Code Editor</h2><button id="run-button">▶ RUN</button></div><textarea id="code-editor">// Welcome to the BranLang™ IDE!
+// This code tests all major features.
+
+show("--- File I/O and Modules Test ---")
+import "my_utils.bl"
+
+mem content = "The square of 8 is " + square(8)
+write_file("output.txt", content)
+show("Wrote to output.txt")
+
+mem read_content = read_file("output.txt")
+show("Read back:", read_content)</textarea></div>
+        <div class="io-pane"><div class="io-box"><h3>STDIN</h3><textarea id="stdin-area" placeholder="Provide all input here, one line per ask() call."></textarea></div><div class="io-box"><h3>Output</h3><pre id="output">Click RUN to see the output.</pre></div></div>
+    </main>
+    <script>
+        var editor = CodeMirror.fromTextArea(document.getElementById("code-editor"), { lineNumbers: true, mode: "python", theme: "material-darker", indentUnit: 2 });
+        const runButton = document.getElementById('run-button');
+        const outputElement = document.getElementById('output');
+        runButton.addEventListener('click', async () => {
+            const code = editor.getValue();
+            const stdin = document.getElementById('stdin-area').value;
+            outputElement.textContent = 'Running...';
+            outputElement.classList.remove('error');
+            try {
+                const response = await fetch('/run', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: code, stdin: stdin }) });
+                const result = await response.json();
+                if (result.error) { outputElement.classList.add('error'); outputElement.textContent = result.error; } 
+                else { outputElement.textContent = result.output; }
+            } catch (err) { outputElement.classList.add('error'); outputElement.textContent = 'An unexpected error occurred.'; console.error(err); }
+        });
+        editor.setOption("extraKeys", {
+            Tab: function(cm) {
+                const cursor = cm.getCursor();
+                const codeUpToCursor = cm.getRange({line: 0, ch: 0}, cursor);
+                const thinkingWidget = document.createElement('span');
+                thinkingWidget.textContent = "🧠 thinking...";
+                thinkingWidget.className = 'thinking-widget';
+                const widgetMarker = cm.setBookmark(cursor, {widget: thinkingWidget});
+                fetch('/complete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: codeUpToCursor }) })
+                    .then(response => response.json())
+                    .then(data => {
+                        widgetMarker.clear();
+                        if (data.completion) { cm.replaceSelection(data.completion); }
+                        if (data.error) { alert("AI Error: " + data.error); }
+                    })
+                    .catch(err => { widgetMarker.clear(); console.error("Autocomplete error:", err); alert("Network error during AI completion."); });
+            }
+        });
+        const themeToggle = document.getElementById('theme-toggle');
+        const setTheme = (isDark) => {
+            document.body.classList.toggle('dark-mode', isDark);
+            localStorage.setItem('branLangTheme', isDark ? 'dark' : 'light');
+            themeToggle.checked = isDark;
+        };
+        themeToggle.addEventListener('change', () => setTheme(themeToggle.checked));
+        const savedTheme = localStorage.getItem('branLangTheme');
+        setTheme(savedTheme ? savedTheme === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches);
+    </script>
+</body>
+</html>

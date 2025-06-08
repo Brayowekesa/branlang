@@ -1,0 +1,14 @@
+show("--- Testing Module Imports ---")
+
+// Import the utility module.
+// This will make PI and square() available.
+import "my_utils.bl"
+
+show("The value of PI from the module is:", PI)
+
+mem num = 7
+mem num_squared = square(num) // Using the function from the module
+
+show(num, "squared is", num_squared)
+
+show("Import test complete!")

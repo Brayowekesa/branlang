@@ -1,0 +1,29 @@
+/* Sample BranLang™ demo */
+
+// Ask for user’s number
+show("Enter a number:")
+mem n = askInt()
+
+// Compute factorial using a function
+fn factorial(x):
+  mem res = 1
+  for i from 1 to x:
+    res = res * i
+  return res
+
+// Main logic
+mem result = factorial(n)
+show("Factorial of", n, "is", result)
+
+when result > 1000:
+  show("That’s a big factorial!")
+otherwise:
+  show("Small factorial.")
+
+ // Countdown with a loop
+mem c = n
+loop (c > 0):
+  show(c)
+  c = c - 1
+
+show("Done!")

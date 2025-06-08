@@ -1,0 +1,36 @@
+// BranLang v0.2 Feature Test
+
+show("--- Exponentiation & Math ---")
+mem eight = 2 ** 3
+show("2 ** 3 is", eight)
+show("sqrt(16) is", sqrt(16))
+show("max(10, 50, 20) is", max(10, 50, 20))
+show("pow(3, 3) is", pow(3, 3))
+show("round(3, 2) is", round(3, 2))
+
+show("") // Blank line
+
+show("--- Booleans & Logic ---")
+mem lights_on = true
+mem engine_running = false
+
+show("Lights on?", lights_on)
+show("Engine running?", engine_running)
+show("Ready to go?", lights_on && engine_running == false)
+
+show("")
+
+show("--- 'otherwise when' Chain Test ---")
+mem score = 85
+
+when score >= 90:
+  show("Grade: A")
+otherwise when score >= 80:
+  show("Grade: B") // This should be the output
+otherwise when score >= 70:
+  show("Grade: C")
+otherwise:
+  show("Grade: Needs Improvement")
+
+show("")
+show("All tests complete! ✨")

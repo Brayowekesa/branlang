@@ -1,0 +1,28 @@
+// BranLang v0.5 - Object Feature Test
+
+show("--- Object Literal & Member Access ---")
+mem player = {
+  "name": "Alex",
+  "score": 100,
+  "is_active": true,
+  "inventory": ["sword", "shield"]
+}
+
+show("Player object:", player)
+show("Player name (dot):", player.name)
+show("Player score (bracket):", player["score"])
+show("Player first item:", player.inventory[0])
+show("")
+
+show("--- Member Assignment ---")
+player.score = 150
+show("New score:", player.score)
+
+player.clan = "Warriors" // Add new property
+show("New clan property:", player.clan)
+
+player["inventory"][1] = "magic shield" // Modify nested array
+show("Updated inventory:", player.inventory)
+show("")
+
+show("Object tests complete! 🏆")

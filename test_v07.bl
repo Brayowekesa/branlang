@@ -1,0 +1,31 @@
+// --- BranLang v0.7 Feature Test ---
+
+show("--- Testing First-Class Functions ---")
+fn say_hello():
+  show("Hello from the function!")
+
+mem greeter = say_hello
+show("Calling function via a variable...")
+greeter()
+show("")
+
+fn do_action(action_fn):
+  show("About to perform an action...")
+  action_fn()
+  show("Action performed.")
+
+do_action(greeter)
+show("")
+
+show("--- Testing For-Each on Objects ---")
+mem user = {
+  "username": "Bran",
+  "id": 101,
+  "status": "active"
+}
+
+for key in user:
+  show(key, "=>", user[key])
+  
+show("")
+show("v0.7 tests complete! ✅")

@@ -1,0 +1,27 @@
+// BranLang v0.3 - Float and Division Test
+
+show("--- Float Declaration and Arithmetic ---")
+mem pi = 3.14
+mem radius = 5.5
+mem circumference = 2 * pi * radius
+show("Circumference is:", circumference)
+
+show("")
+show("--- Float Division ---")
+mem result1 = 10 / 4      // Should be 2.5
+mem result2 = 10 / 3      // Should be 3.333...
+mem result3 = 10.0 / 2.0  // Should be 5.0
+show("10 / 4 =", result1)
+show("10 / 3 =", result2)
+show("10.0 / 2.0 =", result3)
+
+show("")
+show("--- Built-in Function Test with Floats ---")
+show("round(3.14159, 2) is", round(3.14159, 2))
+
+show("")
+show("Float tests complete!")
+
+// Optional: Test the new askFloat() function
+// mem weight = askFloat("Enter your weight in kg: ")
+// show("Your weight is:", weight)

@@ -1,0 +1,55 @@
+// BranLang - Master Test for v0.3
+
+show("--- Integer Input & Factorial ---")
+show("Enter a whole number (e.g., 5):")
+mem n = askInt()
+
+fn factorial(x):
+  when x < 0:
+    return "Factorial not defined for negative numbers"
+  
+  mem res = 1
+  for i from 1 to x:
+    res = res * i
+  return res
+
+mem fact_result = factorial(n)
+show("Factorial of", n, "is", fact_result)
+show("")
+
+show("--- Float Declaration & Arithmetic ---")
+mem pi = 3.14
+mem radius = 5.5
+show("Circumference for radius 5.5 is:", 2 * pi * radius)
+show("")
+
+
+show("--- Float Division ---")
+show("10 / 4 =", 10 / 4)
+show("10 / 3 =", 10 / 3)
+show("")
+
+show("--- Booleans & Logic ---")
+mem lights_on = true
+mem engine_running = false
+show("Ready to go?", lights_on && engine_running == false)
+show("")
+
+show("--- 'otherwise when' Chain Test ---")
+mem score = 85
+when score >= 90:
+  show("Grade: A")
+otherwise when score >= 80:
+  show("Grade: B")
+otherwise:
+  show("Grade: C")
+show("")
+
+show("--- Zero-Argument Function Call ---")
+fn do_test():
+  show("Zero-arg function works!")
+
+do_test()
+show("")
+
+show("Master test complete! ✨")

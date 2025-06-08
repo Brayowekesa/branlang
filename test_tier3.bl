@@ -1,0 +1,26 @@
+// --- Testing Tier 3 Features ---
+
+show("--- C-Style For Loop Test ---")
+for i from 1 to 5:
+  show("Loop iteration:", i)
+show("")
+
+show("--- For Loop with a step ---")
+for j from 10 to 0 step -2:
+  show("Countdown:", j)
+show("")
+
+show("--- Built-in Functions Test ---")
+mem num = 16
+mem root = sqrt(num)
+show("The square root of", num, "is", root)
+
+mem pi_approx = 3.14159
+show("Pi rounded to 2 decimal places is", round(pi_approx, 2))
+show("")
+
+show("--- Exponentiation Test ---")
+mem power_result = 2 ** 8
+show("2 to the power of 8 is", power_result)
+
+show("Test complete!")
