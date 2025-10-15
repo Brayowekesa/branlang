@@ -43,7 +43,7 @@ The easiest way to get started with BranLang is through its web-based IDE.
 
 1.  **Clone the Repository:**
     ```bash
-    git clone https://github.com/your-username/branlang.git
+    git clone https://github.com/Brayowekesa/branlang.git
     cd branlang
     ```
 
@@ -51,7 +51,6 @@ The easiest way to get started with BranLang is through its web-based IDE.
     ```bash
     pip install -r requirements.txt
     ```
-    *(You will need to create a `requirements.txt` file. See below.)*
 
 3.  **Set Up Your API Key:**
     *   Create a file named `.env` in the root of the project directory.
