@@ -1,7 +1,10 @@
-// This is a utility module.
-// It defines a constant and a helper function.
+# my_utils.bl
+# A simple utility library for BranLang.
 
 mem PI = 3.14159
 
-fn square(n):
-  return n * n
+fn square(x):
+    return x * x
+
+fn is_even(n):
+    return n % 2 == 0

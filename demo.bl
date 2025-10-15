@@ -1,4 +1,4 @@
-/* Sample BranLang™ demo */
+// Sample BranLang demo
 
 // Ask for user’s number
 show("Enter a number:")

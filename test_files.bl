@@ -1,20 +1,72 @@
-show("--- File I/O Test ---")
+// Welcome to the BranLang™ Comprehensive Feature Test!
+// This script will test all major language features.
 
-mem filename = "my_test_file.txt"
-mem content_to_write = "Hello from BranLang! 🚀\nThe year is " + 2025
+show("--- 1. Null and Null Coalescing Operator (??) ---")
+mem user_name = null
+mem display_name = user_name ?? "Guest"
+show("Display name should be 'Guest':", display_name)
 
-show("Writing to file:", filename)
-write_file(filename, content_to_write)
-show("Write complete.")
+mem real_user = "Bran"
+mem another_name = real_user ?? "Guest"
+show("Display name should be 'Bran':", another_name)
+show("") // Newline for spacing
+
+show("--- 2. Shorthand Show (>) ---")
+> "This line was printed with the '>' shorthand."
 show("")
 
-show("Reading from file:", filename)
-mem content_read = read_file(filename)
+show("--- 3. Constants (const) ---")
+const PI = 3.14159
+show("The value of PI is:", PI)
 
-show("Content read from file was:")
-show("--------------------")
-show(content_read)
-show("--------------------")
+show("Attempting to reassign a constant (should be caught)...")
+try:
+    PI = 3.14 // This should fail and be caught
+    show("Error: Constant was reassigned without an error!")
+catch err:
+    show("Successfully caught expected error:", err)
 show("")
 
-show("File I/O test complete!")
+show("--- 4. Loop Control (break and continue) ---")
+show("Looping from 1 to 10, skipping 3, breaking at 7:")
+for i from 1 to 10:
+    when i == 3:
+        show("(Skipping 3 with continue)")
+        continue
+    
+    when i == 7:
+        show("(Breaking at 7)")
+        break
+
+    show("  - Looping, i is", i)
+show("Loop finished.")
+show("")
+
+show("--- 5. Chained Conditionals (otherwise when) ---")
+mem score = 85
+show("Testing score of 85...")
+when score >= 90:
+    show("  Grade is A")
+otherwise when score >= 80:
+    show("  Grade is B") // This should be the output
+otherwise when score >= 70:
+    show("  Grade is C")
+otherwise:
+    show("  Grade is F")
+show("")
+
+show("--- 6. File I/O and Modules ---")
+import "my_utils.bl"
+
+mem num = 8
+show("Using 'square' function from my_utils.bl on", num)
+mem content = "The square of " + num + " is " + square(num)
+
+write_file("output.txt", content)
+show("Wrote to output.txt")
+
+mem read_content = read_file("output.txt")
+show("Read back from file:", read_content)
+show("")
+
+show("--- All tests completed successfully! ---")

@@ -1,3 +1,27 @@
+# Python artifacts
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+
+# IDE / Editor specific
+.vscode/
+.idea/
+
+# Environment variables
 .env
+
+# BranLang generated files
+test_output.txt
+output.txt
+my_test_file.txt
+test_data.txt
+
+# Image files
+*.png
+
+# Miscellaneous test files
+character.txt

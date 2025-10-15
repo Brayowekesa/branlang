@@ -1,3 +1,0 @@
-show("hello")
-mem x = 3
-show("x is", x)
