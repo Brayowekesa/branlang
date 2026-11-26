@@ -1,0 +1,35 @@
+--- for with step ---
+10
+7
+4
+1
+--- break / continue ---
+total 32
+n 3
+item1
+item2
+--- loop var reassignment ---
+100
+200
+300
+--- recursion and locals ---
+fib(15) = 610
+sum 10.5
+early [2, 3]
+--- try / catch ---
+before
+caught: Division by zero.
+caught: Array index out of bounds: 5
+attempts 2
+caught: Undefined variable 'undefined_thing'.
+--- const ---
+caught: Cannot assign to constant 'LIMIT'.
+LIMIT 3
+--- strings, objects, coalesce ---
+HELLO WORLD hello world True Hello VM
+['Hello', 'World'] pad
+default 1
+{'a': 1, 'b': [99, 2]} 2
+False True True 1 1024 -7
+1.0 1 True None 2.72 9 1
+<fn fib> <builtin fn len>

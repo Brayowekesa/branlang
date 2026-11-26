@@ -1,0 +1,33 @@
+--- 1. Null and Null Coalescing Operator (??) ---
+Display name should be 'Guest': Guest
+Display name should be 'Bran': Bran
+
+--- 2. Shorthand Show (>) ---
+This line was printed with the '>' shorthand.
+
+--- 3. Constants (const) ---
+The value of PI is: 3.14159
+Attempting to reassign a constant (should be caught)...
+Successfully caught expected error: Cannot assign to constant 'PI'.
+
+--- 4. Loop Control (break and continue) ---
+Looping from 1 to 10, skipping 3, breaking at 7:
+  - Looping, i is 1
+  - Looping, i is 2
+(Skipping 3 with continue)
+  - Looping, i is 4
+  - Looping, i is 5
+  - Looping, i is 6
+(Breaking at 7)
+Loop finished.
+
+--- 5. Chained Conditionals (otherwise when) ---
+Testing score of 85...
+  Grade is B
+
+--- 6. File I/O and Modules ---
+Using 'square' function from my_utils.bl on 8
+Wrote to output.txt
+Read back from file: The square of 8 is 64
+
+--- All tests completed successfully! ---

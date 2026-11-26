@@ -1,0 +1,21 @@
+--- Integer Input & Factorial ---
+Enter a whole number (e.g., 5):
+Factorial of 5 is 120
+
+--- Float Declaration & Arithmetic ---
+Circumference for radius 5.5 is: 34.54
+
+--- Float Division ---
+10 / 4 = 2.5
+10 / 3 = 3.3333333333333335
+
+--- Booleans & Logic ---
+Ready to go? True
+
+--- 'otherwise when' Chain Test ---
+Grade: B
+
+--- Zero-Argument Function Call ---
+Zero-arg function works!
+
+Master test complete! ✨

@@ -1,0 +1,22 @@
+--- C-Style For Loop Test ---
+Loop iteration: 1
+Loop iteration: 2
+Loop iteration: 3
+Loop iteration: 4
+Loop iteration: 5
+
+--- For Loop with a step ---
+Countdown: 10
+Countdown: 8
+Countdown: 6
+Countdown: 4
+Countdown: 2
+Countdown: 0
+
+--- Built-in Functions Test ---
+The square root of 16 is 4.0
+Pi rounded to 2 decimal places is 3.14
+
+--- Exponentiation Test ---
+2 to the power of 8 is 256
+Test complete!

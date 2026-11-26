@@ -1,0 +1,12 @@
+--- Float Declaration and Arithmetic ---
+Circumference is: 34.54
+
+--- Float Division ---
+10 / 4 = 2.5
+10 / 3 = 3.3333333333333335
+10.0 / 2.0 = 5.0
+
+--- Built-in Function Test with Floats ---
+round(3.14159, 2) is 3.14
+
+Float tests complete!

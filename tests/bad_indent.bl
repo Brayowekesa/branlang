@@ -1,0 +1,4 @@
+show("start")
+when true:
+    show("a")
+  show("b")
