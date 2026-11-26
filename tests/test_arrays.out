@@ -1,0 +1,26 @@
+--- Array Literal & Index Access ---
+The full list is: [10, 'two', 3.14, True]
+Item at index 0: 10
+Item at index 2: 3.14
+
+--- Index Assignment ---
+After update: [10, 'zwei', 3.14, True]
+
+--- For-Each Loop ---
+Looping over the list:
+  - Item: 10
+  - Item: zwei
+  - Item: 3.14
+  - Item: True
+
+--- Built-in Functions ---
+Length of my_list: 4
+Pushing 99 onto the list...
+List is now: [10, 'zwei', 3.14, True, 99]
+Length is now: 5
+
+Popped item: 99
+List after pop: [10, 'zwei', 3.14, True]
+Final length: 4
+
+Array tests complete! 🚀

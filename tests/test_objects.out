@@ -1,0 +1,12 @@
+--- Object Literal & Member Access ---
+Player object: {'name': 'Alex', 'score': 100, 'is_active': True, 'inventory': ['sword', 'shield']}
+Player name (dot): Alex
+Player score (bracket): 100
+Player first item: sword
+
+--- Member Assignment ---
+New score: 150
+New clan property: Warriors
+Updated inventory: ['sword', 'magic shield']
+
+Object tests complete! 🏆

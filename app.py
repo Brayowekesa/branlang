@@ -1,13 +1,7 @@
 from flask import Flask, render_template, request, jsonify
 import io, contextlib, os
+import requests
 from dotenv import load_dotenv
-
-# Optional OpenAI client import (fail gracefully if not installed/configured)
-try:
-    from openai import OpenAI, AuthenticationError
-except Exception:
-    OpenAI = None
-    AuthenticationError = Exception
 
 # Load .env
 load_dotenv()
@@ -17,15 +11,6 @@ from branlang import run
 
 app = Flask(__name__, template_folder='templates')
 
-# Initialize OpenAI client if API key present
-client = None
-if OpenAI is not None:
-    api_key = os.getenv("OPENAI_API_KEY")
-    if api_key:
-        try:
-            client = OpenAI(api_key=api_key)
-        except Exception as e:
-            print(f"Warning: OpenAI client init failed: {e}")
 
 @app.route('/')
 def index():
@@ -48,24 +33,40 @@ def run_code():
 
 @app.route('/complete', methods=['POST'])
 def complete():
-    if client is None:
-        return jsonify({"error": "AI client not configured."}), 500
+    api_key = os.getenv("GOOGLE_API_KEY")
+    if not api_key:
+        return jsonify({"error": "Missing Google API Key"}), 500
 
     data = request.get_json() or {}
-    code_prompt = data.get('code', '')
+    user_code = data.get('code', '')
+
+    # Prepare the prompt for BranLang
+    prompt_text = f"""
+    You are an expert coder in a language called BranLang.
+    BranLang syntax uses 'mem' for variables, 'fn' for functions, 'show' for output.
+    Complete the following code snippet. Do not explain, just provide the code completion.
+    
+    Code:
+    {user_code}
+    """
+
+    model_name = os.getenv("GEMINI_MODEL", "gemini-1.5-flash-latest")
+    gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
+    payload = {
+        "contents": [{
+            "parts": [{"text": prompt_text}]
+        }]
+    }
+
     try:
-        completion = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": "system", "content": "You are a BranLang programming assistant. Provide only code completions without explanation or markdown."},
-                {"role": "user", "content": f"Complete the following BranLang code:\n\n```branlang\n{code_prompt}```"}
-            ],
-            temperature=0.2, max_tokens=200, timeout=15.0
-        )
-        completed_code = completion.choices[0].message.content.strip()
-        return jsonify({"completion": completed_code})
-    except AuthenticationError:
-        return jsonify({"error": "AI authentication failed."}), 500
+        response = requests.post(gemini_url, json=payload, headers={'Content-Type': 'application/json'})
+        if response.status_code == 200:
+            result = response.json()
+            # Extract text from Gemini response structure
+            completion = result.get('candidates', [{}])[0].get('content', {}).get('parts', [{}])[0].get('text', '// AI returned no text')
+            return jsonify({"completion": completion})
+        else:
+            return jsonify({"error": f"AI Error: {response.status_code} - {response.text}"}), 500
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

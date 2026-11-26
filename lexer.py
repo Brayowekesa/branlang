@@ -72,7 +72,14 @@ class Lexer:
                 if self.current_char == '\n': self.advance(); continue
                 current_indent = 0
                 while self.current_char == ' ': current_indent += 1; self.advance()
-                if self.current_char not in ('\n', '#'):
+                # Blank and comment-only lines (# or //) are skipped entirely:
+                # they don't affect indentation or emit NEWLINE tokens.
+                is_comment = self.current_char == '#' or (self.current_char == '/' and self.peek() == '/')
+                if is_comment or self.current_char in ('\n', '\r'):
+                    while self.current_char is not None and self.current_char != '\n': self.advance()
+                    if self.current_char == '\n': self.advance()
+                    continue
+                if self.current_char is not None:
                     if current_indent > self.indent_stack[-1]: self.indent_stack.append(current_indent); tokens.append(Token(TokenType.INDENT))
                     while current_indent < self.indent_stack[-1]: self.indent_stack.pop(); tokens.append(Token(TokenType.DEDENT))
                     if current_indent != self.indent_stack[-1]: raise LexerError(f"Indentation error at line {self.line}")

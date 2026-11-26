@@ -1,0 +1,11 @@
+// Regression: comment-only lines with stray indentation must not
+// affect block structure.
+fn twice(x):
+  # indented hash comment
+      // over-indented comment inside a block
+  return x * 2
+ // comment with a single leading space at top level
+show(twice(21))
+   # deeper top-level comment
+
+show("ok")

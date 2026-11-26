@@ -27,7 +27,7 @@ BranLang is a fully-featured scripting language that supports:
 *   **Built-in Standard Library:** Includes functions for math (`sqrt`, `round`), array manipulation (`len`, `push`, `pop`), and I/O (`show`, `askInt`).
 *   **AI-Augmented Web IDE:**
     *   A beautiful web-based editor with syntax highlighting.
-    *   AI-powered code completion (press `Tab` to complete your code).
+    *   AI-powered code completion (press `Tab` to complete your code) using Google Gemini.
     *   Light and Dark mode support.
 
 ## 🕹️ The BranLang™ Playground (Web IDE)
@@ -37,7 +37,7 @@ The easiest way to get started with BranLang is through its web-based IDE.
 ### Prerequisites
 
 *   Python 3.x
-*   An OpenAI API Key (for the AI features)
+*   A Google AI API Key (for the AI features)
 
 ### Running the IDE
 
@@ -54,9 +54,12 @@ The easiest way to get started with BranLang is through its web-based IDE.
 
 3.  **Set Up Your API Key:**
     *   Create a file named `.env` in the root of the project directory.
-    *   Add your OpenAI secret key to this file:
+    *   Add your Google AI API key to this file:
       ```
-      OPENAI_API_KEY="sk-YourSecretKeyGoesHere"
+      GOOGLE_API_KEY="YourGoogleApiKeyGoesHere"
+
+      # Optional: Specify a different Gemini model (defaults to gemini-pro)
+      # GEMINI_MODEL="gemini-1.5-pro-latest"
       ```
 
 4.  **Run the Web Server:**
@@ -67,3 +70,32 @@ The easiest way to get started with BranLang is through its web-based IDE.
 5.  **Open Your Browser:** Navigate to **`http://127.0.0.1:5000`**. You should now see the BranLang IDE, ready for you to code!
 
 ### Creating `requirements.txt`
+```text
+Flask==3.0.0
+python-dotenv==1.0.0
+google-generativeai>=0.8.3
+```
+
+## Running BranLang Files
+
+```bash
+python branlang.py my_program.bl          # tree-walking AST interpreter (default)
+python branlang.py --vm my_program.bl     # compile to bytecode and run on the VM
+python branlang.py --dis my_program.bl    # print the compiled bytecode instead of running
+```
+
+Set `BRANLANG_ENGINE=vm` to make the VM the default (this also applies to the web IDE).
+
+The bytecode engine lives in `bytecode.py` (opcodes and chunks), `compiler.py` (AST → bytecode)
+and `vm.py` (stack-based VM). It supports everything the AST interpreter does except closures:
+a nested function can't yet read a local variable of the function or block it was defined in.
+
+## Running the Tests
+
+Each `tests/<name>.bl` is run and its output compared with `tests/<name>.out`
+(`<name>.in` supplies input, `<name>.err` marks an expected error):
+
+```bash
+python run_tests.py        # AST interpreter
+python run_tests.py --vm   # bytecode VM
+```

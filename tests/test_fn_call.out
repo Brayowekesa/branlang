@@ -1,0 +1,11 @@
+--- Function Test ---
+Result of add(10, 5) is 15
+
+--- Conditional Test ---
+Result is greater than 10.
+
+--- Loop Test ---
+Countdown: 3
+Countdown: 2
+Countdown: 1
+Test complete!

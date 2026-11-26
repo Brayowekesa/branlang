@@ -4,7 +4,8 @@ import sys
 import subprocess
 from pathlib import Path
 
-TEST_DIR = Path(__file__).parent / "tests"
+ROOT_DIR = Path(__file__).resolve().parent
+TEST_DIR = ROOT_DIR / "tests"
 
 def find_test_cases():
     """Finds all BranLang test files (*.bl) in the tests/ directory."""
@@ -15,7 +16,7 @@ def find_test_cases():
     test_files = sorted(TEST_DIR.glob("*.bl"))
     return [path.stem for path in test_files]
 
-def run_single_test(test_name):
+def run_single_test(test_name, engine='ast'):
     """
     Runs a single test case and compares its output/error to expected files.
     Returns (passed: bool, details: str).
@@ -34,8 +35,9 @@ def run_single_test(test_name):
     env['PYTHONIOENCODING'] = 'utf-8'
 
     result = subprocess.run(
-        [sys.executable, 'branlang.py', str(source_file)],
-        capture_output=True, text=True, encoding='utf-8', input=stdin_payload, env=env
+        [sys.executable, str(ROOT_DIR / 'branlang.py'), f'--{engine}', str(source_file)],
+        capture_output=True, text=True, encoding='utf-8', input=stdin_payload, env=env,
+        cwd=ROOT_DIR,  # module imports and file I/O in tests resolve from the repo root
     )
 
     # Normalize line endings for cross-platform compatibility
@@ -77,16 +79,16 @@ def run_single_test(test_name):
 
     return True, "PASSED"
 
-def run_tests():
+def run_tests(engine='ast'):
     test_cases = find_test_cases()
     passed_count = 0
     failed_tests = []
 
-    print("=== Running BranLang Test Suite ===")
+    print(f"=== Running BranLang Test Suite (engine: {engine}) ===")
     
     for test_name in test_cases:
         print(f"--- Running: {test_name}.bl ... ", end="")
-        passed, details = run_single_test(test_name)
+        passed, details = run_single_test(test_name, engine)
         print(details.split('\n')[0]) # Print just the first line of the status
         if passed:
             passed_count += 1
@@ -105,4 +107,4 @@ def run_tests():
         sys.exit(0)
 
 if __name__ == '__main__':
-    run_tests()
+    run_tests('vm' if '--vm' in sys.argv[1:] else 'ast')

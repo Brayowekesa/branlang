@@ -1,0 +1,16 @@
+--- Exponentiation & Math ---
+2 ** 3 is 8
+sqrt(16) is 4.0
+max(10, 50, 20) is 50
+pow(3, 3) is 27.0
+round(3, 2) is 3
+
+--- Booleans & Logic ---
+Lights on? True
+Engine running? False
+Ready to go? True
+
+--- 'otherwise when' Chain Test ---
+Grade: B
+
+All tests complete! ✨

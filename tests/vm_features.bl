@@ -1,0 +1,113 @@
+// Exercises control flow, scoping and errors; output must match on --ast and --vm.
+show("--- for with step ---")
+for i from 10 to 1 step -3:
+  show(i)
+for i from 1 to 3 step 0:
+  show("never")
+
+show("--- break / continue ---")
+mem total = 0
+for i from 1 to 10:
+  when i % 2 == 0:
+    continue
+  when i > 7:
+    break
+  mem doubled = i * 2
+  total = total + doubled
+show("total", total)
+
+mem n = 0
+loop (true):
+  n = n + 1
+  when n < 3:
+    continue
+  break
+show("n", n)
+
+for item in [1, 2, 3, 4]:
+  mem label = "item" + item
+  when item == 3:
+    break
+  show(label)
+
+show("--- loop var reassignment ---")
+for i from 1 to 3:
+  i = i * 100
+  show(i)
+
+show("--- recursion and locals ---")
+fn fib(k):
+  when k < 2:
+    return k
+  mem a = fib(k - 1)
+  mem b = fib(k - 2)
+  return a + b
+show("fib(15) =", fib(15))
+
+fn sum_list(xs):
+  mem acc = 0
+  for x in xs:
+    acc = acc + x
+  return acc
+show("sum", sum_list([1, 2, 3, 4.5]))
+
+fn early(xs):
+  for x in xs:
+    for y in xs:
+      when x * y == 6:
+        return [x, y]
+  return null
+show("early", early([1, 2, 3]))
+
+show("--- try / catch ---")
+try:
+  show("before")
+  mem z = 10 / 0
+  show("not reached")
+catch err:
+  show("caught:", err)
+
+fn risky(v):
+  return [1, 2][v]
+try:
+  risky(5)
+catch e:
+  show("caught:", e)
+
+mem attempts = 0
+for i from 1 to 5:
+  try:
+    when i == 2:
+      continue
+    when i == 4:
+      break
+    attempts = attempts + 1
+  catch e:
+    show("unexpected", e)
+show("attempts", attempts)
+
+try:
+  undefined_thing = 1
+catch e:
+  show("caught:", e)
+
+show("--- const ---")
+const LIMIT = 3
+try:
+  LIMIT = 4
+catch e:
+  show("caught:", e)
+show("LIMIT", LIMIT)
+
+show("--- strings, objects, coalesce ---")
+mem s = "Hello World"
+show(s.upper(), s.lower(), s.contains("World"), s.replace("World", "VM"))
+show(s.split(" "), "  pad ".trim())
+mem obj = {"a": 1}
+show(obj.missing ?? "default", obj.a ?? "default")
+obj.b = [1, 2]
+obj.b[0] = 99
+show(obj, len(obj))
+show(true && false, true || false, 1 == 1.0, 7 % 3, 2 ** 10, -(3 + 4))
+show(1.0, 1, true, null, round(2.71828, 2), max([3, 9, 2]), min(4, 1, 8))
+show(fib, len)
