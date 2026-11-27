@@ -16,7 +16,7 @@ def find_test_cases():
     test_files = sorted(TEST_DIR.glob("*.bl"))
     return [path.stem for path in test_files]
 
-def run_single_test(test_name, engine='ast'):
+def run_single_test(test_name, engine='vm'):
     """
     Runs a single test case and compares its output/error to expected files.
     Returns (passed: bool, details: str).
@@ -79,8 +79,18 @@ def run_single_test(test_name, engine='ast'):
 
     return True, "PASSED"
 
-def run_tests(engine='ast'):
+def is_vm_only(test_name):
+    """Tests whose first line contains 'vm-only' use features the AST interpreter lacks."""
+    with open(TEST_DIR / f"{test_name}.bl", encoding='utf-8') as f:
+        return 'vm-only' in f.readline()
+
+def run_tests(engine='vm'):
     test_cases = find_test_cases()
+    if engine == 'ast':
+        skipped = [t for t in test_cases if is_vm_only(t)]
+        test_cases = [t for t in test_cases if t not in skipped]
+        if skipped:
+            print("Skipping VM-only tests:", ", ".join(skipped))
     passed_count = 0
     failed_tests = []
 
@@ -107,4 +117,4 @@ def run_tests(engine='ast'):
         sys.exit(0)
 
 if __name__ == '__main__':
-    run_tests('vm' if '--vm' in sys.argv[1:] else 'ast')
+    run_tests('ast' if '--ast' in sys.argv[1:] else 'vm')

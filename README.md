@@ -79,12 +79,12 @@ google-generativeai>=0.8.3
 ## Running BranLang Files
 
 ```bash
-python branlang.py my_program.bl          # tree-walking AST interpreter (default)
-python branlang.py --vm my_program.bl     # compile to bytecode and run on the VM
+python branlang.py my_program.bl          # compile to bytecode and run on the VM (default)
+python branlang.py --ast my_program.bl    # tree-walking AST interpreter
 python branlang.py --dis my_program.bl    # print the compiled bytecode instead of running
 ```
 
-Set `BRANLANG_ENGINE=vm` to make the VM the default (this also applies to the web IDE).
+Set `BRANLANG_ENGINE=ast` to make the AST interpreter the default (this also applies to the web IDE).
 
 The bytecode engine lives in `bytecode.py` (opcodes and chunks), `compiler.py` (AST → bytecode)
 and `vm.py` (stack-based VM). It supports everything the AST interpreter does, including
@@ -97,6 +97,6 @@ Each `tests/<name>.bl` is run and its output compared with `tests/<name>.out`
 (`<name>.in` supplies input, `<name>.err` marks an expected error):
 
 ```bash
-python run_tests.py        # AST interpreter
-python run_tests.py --vm   # bytecode VM
+python run_tests.py        # bytecode VM
+python run_tests.py --ast  # AST interpreter (skips tests marked `// vm-only` on their first line)
 ```

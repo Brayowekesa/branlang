@@ -7,7 +7,7 @@ from vm import Compiler, VM, VMError
 
 ENGINES = ('ast', 'vm')
 # Default engine; override with --ast / --vm or the BRANLANG_ENGINE env var.
-DEFAULT_ENGINE = os.environ.get('BRANLANG_ENGINE', 'ast')
+DEFAULT_ENGINE = os.environ.get('BRANLANG_ENGINE', 'vm')
 
 def run(source_code, stdin_text=None, engine=None, disassemble=False):
     engine = engine or DEFAULT_ENGINE
@@ -53,7 +53,7 @@ if __name__ == '__main__':
     if disassemble:
         args.remove('--dis')
     if len(args) != 1:
-        print("Usage: python branlang.py [--ast | --vm] [--dis] <filename.bl>")
+        print("Usage: python branlang.py [--vm | --ast] [--dis] <filename.bl>  (default: --vm)")
         sys.exit(1)
     filename = args[0]
     stdin_text = None
