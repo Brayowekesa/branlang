@@ -1,0 +1,103 @@
+// Closures: output must match on --ast and --vm.
+show("--- counter ---")
+fn make_counter():
+  mem count = 0
+  fn next():
+    count = count + 1
+    return count
+  return next
+mem c1 = make_counter()
+mem c2 = make_counter()
+c1()
+c1()
+show("c1:", c1(), "c2:", c2())
+
+show("--- shared capture ---")
+fn make_account(balance):
+  fn deposit(amount):
+    balance = balance + amount
+    return balance
+  fn check():
+    return balance
+  return {"deposit": deposit, "check": check}
+mem acct = make_account(100)
+acct.deposit(50)
+acct.deposit(25)
+show("balance:", acct.check())
+
+show("--- capture after outer changes ---")
+fn outer():
+  mem msg = "before"
+  fn read():
+    return msg
+  msg = "after"
+  return read
+show(outer()())
+
+show("--- per-iteration loop capture ---")
+mem fns = []
+for i from 1 to 3:
+  fn get():
+    return i * 10
+  push(fns, get)
+for f in fns:
+  show(f())
+mem names = []
+for name in ["a", "b", "c"]:
+  mem upper = name.upper()
+  fn greet():
+    return "hi " + upper
+  push(names, greet)
+show(names[0](), names[1](), names[2]())
+
+show("--- local recursion ---")
+fn run():
+  fn fact(n):
+    when n <= 1:
+      return 1
+    return n * fact(n - 1)
+  return fact(10)
+show("10! =", run())
+
+show("--- nested capture (two levels) ---")
+fn adder(a):
+  fn mid(b):
+    fn inner(c):
+      return a + b + c
+    return inner
+  return mid
+show(adder(1)(20)(300))
+
+show("--- capture survives break and try ---")
+mem saved = []
+for k in [1, 2, 3, 4]:
+  mem label = "k" + k
+  fn get_label():
+    return label
+  push(saved, get_label)
+  when k == 2:
+    break
+show(saved[0](), saved[1]())
+mem caught = null
+fn risky():
+  mem secret = "kept"
+  fn reveal():
+    return secret
+  caught = reveal
+  mem boom = 1 / 0
+try:
+  risky()
+catch e:
+  show("caught:", e, "/", caught())
+
+show("--- const capture ---")
+fn locked():
+  const LIMIT = 5
+  fn try_change():
+    LIMIT = 6
+  try:
+    try_change()
+  catch e:
+    show("caught:", e)
+  return LIMIT
+show("LIMIT:", locked())

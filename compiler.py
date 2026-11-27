@@ -25,6 +25,14 @@ MAX_U16 = 0xFFFF
 class Local:
     def __init__(self, name, depth, is_const=False):
         self.name, self.depth, self.is_const = name, depth, is_const
+        self.captured = False  # set when a nested function closes over this local
+
+
+class UpvalueRef:
+    def __init__(self, index, is_local, is_const):
+        # is_local: `index` is a local slot of the enclosing function;
+        # otherwise it is an index into the enclosing function's own upvalues.
+        self.index, self.is_local, self.is_const = index, is_local, is_const
 
 
 class LoopContext:
@@ -44,6 +52,7 @@ class Compiler:
         self.scope_depth = 0 if self.is_script else 1
         # Slot 0 holds the function being executed (the callee).
         self.locals = [Local("", self.scope_depth)]
+        self.upvalues = []
         self.loops = []
         self.try_depth = 0
 
@@ -101,7 +110,7 @@ class Compiler:
     def end_scope(self):
         self.scope_depth -= 1
         while self.locals and self.locals[-1].depth > self.scope_depth:
-            self.emit(Op.POP)
+            self.emit(Op.CLOSE_UPVALUE if self.locals[-1].captured else Op.POP)
             self.locals.pop()
 
     def add_local(self, name, is_const=False):
@@ -116,16 +125,29 @@ class Compiler:
                 return i
         return -1
 
-    def check_not_captured(self, name):
-        """The VM has no closures yet: refuse to compile a reference to an
-        enclosing function's (or block's) local instead of silently reading a global."""
-        compiler = self.enclosing
-        while compiler is not None:
-            if compiler.resolve_local(name) != -1:
-                raise CompileError(
-                    f"The VM does not support closures yet: '{name}' is a local variable of an "
-                    f"enclosing scope. Run with --ast, or make '{name}' a global.")
-            compiler = compiler.enclosing
+    def resolve_upvalue(self, name):
+        """Find `name` in an enclosing function's locals (capturing it) or upvalues."""
+        if self.enclosing is None:
+            return -1
+        slot = self.enclosing.resolve_local(name)
+        if slot != -1:
+            local = self.enclosing.locals[slot]
+            local.captured = True
+            return self.add_upvalue(slot, True, local.is_const)
+        index = self.enclosing.resolve_upvalue(name)
+        if index != -1:
+            return self.add_upvalue(index, False, self.enclosing.upvalues[index].is_const)
+        return -1
+
+    def add_upvalue(self, index, is_local, is_const):
+        for i, up in enumerate(self.upvalues):
+            if up.index == index and up.is_local == is_local:
+                return i
+        if len(self.upvalues) >= 256:
+            raise CompileError("Too many captured variables in one function.")
+        self.upvalues.append(UpvalueRef(index, is_local, is_const))
+        self.function.upvalue_count = len(self.upvalues)
+        return len(self.upvalues) - 1
 
     def declare_variable(self, name, is_const=False):
         """Bind the value on top of the stack to `name` in the current scope."""
@@ -134,15 +156,21 @@ class Compiler:
             self.emit_u16(op, self.name_constant(name))
             return
         # Re-declaring in the same scope overwrites, as in the interpreter.
+        slot = self.find_in_current_scope(name)
+        if slot != -1:
+            self.locals[slot].is_const = is_const
+            self.emit(Op.SET_LOCAL, slot, Op.POP)
+        else:
+            self.add_local(name, is_const)
+
+    def find_in_current_scope(self, name):
         for i in range(len(self.locals) - 1, 0, -1):
             local = self.locals[i]
             if local.depth < self.scope_depth:
                 break
             if local.name == name:
-                local.is_const = is_const
-                self.emit(Op.SET_LOCAL, i, Op.POP)
-                return
-        self.add_local(name, is_const)
+                return i
+        return -1
 
     # ---- dispatch ----------------------------------------------------
     def visit(self, node):
@@ -225,23 +253,29 @@ class Compiler:
         slot = self.resolve_local(node.name)
         if slot != -1:
             self.emit(Op.GET_LOCAL, slot)
+            return
+        index = self.resolve_upvalue(node.name)
+        if index != -1:
+            self.emit(Op.GET_UPVALUE, index)
         else:
-            self.check_not_captured(node.name)
             self.emit_u16(Op.GET_GLOBAL, self.name_constant(node.name))
 
     def visit_VarAssign(self, node):
         name = node.name_node.name
         self.visit(node.expr)
         slot = self.resolve_local(name)
-        if slot != -1:
-            if self.locals[slot].is_const:
-                self.emit(Op.POP)
-                self.emit_raise(f"Cannot assign to constant '{name}'.")
-                self.emit(Op.NULL)  # keep the stack balanced for the analyser; never reached
-                return
+        index = self.resolve_upvalue(name) if slot == -1 else -1
+        is_const = ((slot != -1 and self.locals[slot].is_const) or
+                    (index != -1 and self.upvalues[index].is_const))
+        if is_const:
+            self.emit(Op.POP)
+            self.emit_raise(f"Cannot assign to constant '{name}'.")
+            self.emit(Op.NULL)  # keeps the stack balanced; never reached
+        elif slot != -1:
             self.emit(Op.SET_LOCAL, slot)
+        elif index != -1:
+            self.emit(Op.SET_UPVALUE, index)
         else:
-            self.check_not_captured(name)
             self.emit_u16(Op.SET_GLOBAL, self.name_constant(name))
 
     # ---- statements --------------------------------------------------
@@ -346,8 +380,13 @@ class Compiler:
         """Pop the body's locals and close try blocks before break/continue jumps."""
         for _ in range(self.try_depth - ctx.try_depth):
             self.emit(Op.POP_TRY)
-        for _ in range(len(self.locals) - ctx.locals_count):
-            self.emit(Op.POP)
+        count = len(self.locals) - ctx.locals_count
+        if count:
+            # A closure later in the body may capture one of these locals (not
+            # known yet at this point), so close their upvalues before popping.
+            self.emit(Op.CLOSE_FROM, ctx.locals_count)
+            for _ in range(count):
+                self.emit(Op.POP)
 
     def visit_BreakNode(self, node):
         if not self.loops:
@@ -390,14 +429,26 @@ class Compiler:
         name = node.name_node.name
         if len(node.params) > 255:
             raise CompileError("A function can take at most 255 parameters.")
+        # Declare the local before compiling the body, so a nested function can
+        # call itself (recursion) through an upvalue. Globals are found by name.
+        redeclared = self.scope_depth > 0 and self.find_in_current_scope(name) != -1
+        if self.scope_depth > 0 and not redeclared:
+            self.add_local(name)
+
         fn_compiler = Compiler(name, len(node.params), enclosing=self)
         for param in node.params:
             fn_compiler.add_local(param.name)
         fn_compiler.visit(node.body)
         fn_compiler.emit(Op.NULL, Op.RETURN)  # implicit 'return null'
 
-        self.emit_constant(fn_compiler.function)
-        self.declare_variable(name)
+        self.emit_u16(Op.CLOSURE, self.chunk.add_constant(fn_compiler.function))
+        for up in fn_compiler.upvalues:
+            self.emit(1 if up.is_local else 0, up.index)
+
+        if self.scope_depth == 0:
+            self.emit_u16(Op.DEFINE_GLOBAL, self.name_constant(name))
+        elif redeclared:
+            self.declare_variable(name)  # overwrite the existing local of the same name
 
     def visit_FnCall(self, node):
         if len(node.args) > 255:

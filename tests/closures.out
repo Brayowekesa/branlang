@@ -1,0 +1,21 @@
+--- counter ---
+c1: 3 c2: 1
+--- shared capture ---
+balance: 175
+--- capture after outer changes ---
+after
+--- per-iteration loop capture ---
+10
+20
+30
+hi A hi B hi C
+--- local recursion ---
+10! = 3628800
+--- nested capture (two levels) ---
+321
+--- capture survives break and try ---
+k1 k2
+caught: Division by zero. / kept
+--- const capture ---
+caught: Cannot assign to constant 'LIMIT'.
+LIMIT: 5

@@ -1,7 +1,7 @@
 # vm.py - stack-based virtual machine that runs compiled BranLang bytecode
 import math
 from common import BranError, VMError, CompileError
-from bytecode import Op, ObjFunction, NativeFunction
+from bytecode import Op, NativeFunction, Closure, Upvalue
 from compiler import Compiler
 
 __all__ = ['VM', 'VMError', 'CompileError', 'Compiler']
@@ -15,14 +15,15 @@ _OPCODE_VALUES = tuple(int(Op[name]) for name in (
     'GET_INDEX', 'GET_ITER', 'GET_LOCAL', 'GT', 'GTE', 'HALT', 'IMPORT', 'JUMP',
     'JUMP_IF_FALSE', 'LOOP', 'LT', 'LTE', 'MOD', 'MUL', 'NE', 'NEGATE', 'NULL', 'OR', 'POP',
     'POP_TRY', 'POW', 'PRINT_N', 'RAISE', 'RANGE_COND', 'RETURN', 'SETUP_TRY', 'SET_GLOBAL',
-    'SET_INDEX', 'SET_LOCAL', 'SUB', 'TRUE'))
+    'SET_INDEX', 'SET_LOCAL', 'SUB', 'TRUE', 'CLOSURE', 'GET_UPVALUE', 'SET_UPVALUE',
+    'CLOSE_UPVALUE', 'CLOSE_FROM'))
 
 
 class CallFrame:
-    __slots__ = ('function', 'ip', 'base')
+    __slots__ = ('closure', 'function', 'ip', 'base')
 
-    def __init__(self, function, base):
-        self.function, self.ip, self.base = function, 0, base
+    def __init__(self, closure, base):
+        self.closure, self.function, self.ip, self.base = closure, closure.function, 0, base
 
 
 class TryHandler:
@@ -112,8 +113,10 @@ BUILTINS = {
 
 class VM:
     def __init__(self, script, stdin_text=None, input_state=None, module_cache=None):
+        script = Closure(script)
         self.stack = [script]  # slot 0 of the script frame holds the script itself
         self.frames = [CallFrame(script, 0)]
+        self.open_upvalues = {}  # stack slot -> open Upvalue pointing at it
         self.handlers = []
         self.globals = {}
         self.const_globals = set()
@@ -134,6 +137,7 @@ class VM:
                 # Unwind to the innermost try block and jump to its catch handler.
                 handler = self.handlers.pop()
                 del self.frames[handler.frame_count:]
+                self._close_upvalues(handler.stack_len)
                 del self.stack[handler.stack_len:]
                 self.stack.append(str(e))
                 self.frames[-1].ip = handler.handler_ip
@@ -144,11 +148,14 @@ class VM:
         DEFINE_GLOBAL, DIV, EQ, FALSE, FOR_ITER, GET_GLOBAL, GET_INDEX, GET_ITER, GET_LOCAL,
         GT, GTE, HALT, IMPORT, JUMP, JUMP_IF_FALSE, LOOP, LT, LTE, MOD, MUL, NE, NEGATE, NULL,
         OR, POP, POP_TRY, POW, PRINT_N, RAISE, RANGE_COND, RETURN, SETUP_TRY, SET_GLOBAL,
-        SET_INDEX, SET_LOCAL, SUB, TRUE) = _OPCODE_VALUES
+        SET_INDEX, SET_LOCAL, SUB, TRUE, CLOSURE, GET_UPVALUE, SET_UPVALUE,
+        CLOSE_UPVALUE, CLOSE_FROM) = _OPCODE_VALUES
         stack, frames, globals_ = self.stack, self.frames, self.globals
         frame = frames[-1]
         code, constants = frame.function.chunk.code, frame.function.chunk.constants
         base, ip = frame.base, frame.ip
+        upvalues = frame.closure.upvalues
+        open_upvalues = self.open_upvalues
 
         while True:
             op = code[ip]
@@ -209,16 +216,17 @@ class VM:
                 call_ip = ip - 1
                 argc = code[ip]; ip += 1
                 callee = stack[-1 - argc]
-                if isinstance(callee, ObjFunction):
-                    if argc != callee.arity:
-                        raise VMError(f"Expected {callee.arity} arguments but got {argc}.")
+                if isinstance(callee, Closure):
+                    if argc != callee.function.arity:
+                        raise VMError(f"Expected {callee.function.arity} arguments but got {argc}.")
                     if len(frames) >= MAX_FRAMES:
                         raise VMError("Maximum recursion depth exceeded.")
                     frame.ip = ip
                     frame = CallFrame(callee, len(stack) - argc - 1)
                     frames.append(frame)
                     ip = 0
-                    code, constants, base = callee.chunk.code, callee.chunk.constants, frame.base
+                    chunk = callee.function.chunk
+                    code, constants, base, upvalues = chunk.code, chunk.constants, frame.base, callee.upvalues
                 elif isinstance(callee, (NativeFunction, BoundMethod)):
                     args = stack[len(stack) - argc:]
                     del stack[len(stack) - argc - 1:]
@@ -229,6 +237,8 @@ class VM:
             elif op == RETURN:
                 result = stack.pop()
                 frames.pop()
+                if open_upvalues:
+                    self._close_upvalues(frame.base)
                 del stack[frame.base:]
                 stack.append(result)
                 # Drop try handlers that belonged to the frame we just left.
@@ -236,6 +246,7 @@ class VM:
                     self.handlers.pop()
                 frame = frames[-1]
                 code, constants, base, ip = frame.function.chunk.code, frame.function.chunk.constants, frame.base, frame.ip
+                upvalues = frame.closure.upvalues
 
             elif op == ADD:
                 b = stack.pop(); a = stack.pop()
@@ -274,6 +285,26 @@ class VM:
             elif op == NEGATE:
                 stack[-1] = -stack[-1]
 
+            elif op == GET_UPVALUE:
+                up = upvalues[code[ip]]; ip += 1
+                stack.append(stack[up.slot] if up.is_open else up.value)
+            elif op == SET_UPVALUE:
+                up = upvalues[code[ip]]; ip += 1
+                if up.is_open: stack[up.slot] = stack[-1]
+                else: up.value = stack[-1]
+            elif op == CLOSURE:
+                function = constants[(code[ip] << 8) | code[ip + 1]]; ip += 2
+                captured = []
+                for _ in range(function.upvalue_count):
+                    is_local, index = code[ip], code[ip + 1]; ip += 2
+                    captured.append(self._capture_upvalue(base + index) if is_local else upvalues[index])
+                stack.append(Closure(function, captured))
+            elif op == CLOSE_UPVALUE:
+                self._close_upvalues(len(stack) - 1)
+                stack.pop()
+            elif op == CLOSE_FROM:
+                slot = code[ip]; ip += 1
+                if open_upvalues: self._close_upvalues(base + slot)
             elif op == BUILD_LIST:
                 count = (code[ip] << 8) | code[ip + 1]; ip += 2
                 items = stack[len(stack) - count:]
@@ -317,6 +348,18 @@ class VM:
                 raise VMError(f"Unknown opcode {op}")
 
     # ---- helpers -----------------------------------------------------
+    def _capture_upvalue(self, slot):
+        up = self.open_upvalues.get(slot)
+        if up is None:
+            up = self.open_upvalues[slot] = Upvalue(slot)
+        return up
+
+    def _close_upvalues(self, from_slot):
+        """Move captured values at stack slots >= from_slot into their upvalues."""
+        for slot in [s for s in self.open_upvalues if s >= from_slot]:
+            up = self.open_upvalues.pop(slot)
+            up.value, up.is_open = self.stack[slot], False
+
     @staticmethod
     def _get_member(obj, key):
         if isinstance(obj, list):

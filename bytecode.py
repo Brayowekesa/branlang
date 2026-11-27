@@ -56,6 +56,12 @@ class Op(IntEnum):
     ASK = 43            # u8 kind: 0 = string, 1 = int, 2 = float
     IMPORT = 44         # u16 filename constant
     HALT = 45
+    # Closures
+    CLOSURE = 46        # u16 function constant, then (is_local u8, index u8) per upvalue
+    GET_UPVALUE = 47    # u8 upvalue index
+    SET_UPVALUE = 48    # u8 upvalue index
+    CLOSE_UPVALUE = 49  # move the captured local on top of the stack into its upvalue, pop it
+    CLOSE_FROM = 50     # u8 slot: close upvalues for this slot and above (before break/continue)
 
 
 # Size in bytes of each opcode's operand (opcodes not listed take none).
@@ -64,6 +70,7 @@ OPERAND_SIZE = {
     Op.GET_LOCAL: 1, Op.SET_LOCAL: 1,
     Op.JUMP: 2, Op.JUMP_IF_FALSE: 2, Op.LOOP: 2, Op.FOR_ITER: 2, Op.SETUP_TRY: 2,
     Op.CALL: 1, Op.BUILD_LIST: 2, Op.BUILD_MAP: 2, Op.PRINT_N: 1, Op.ASK: 1, Op.IMPORT: 2,
+    Op.CLOSURE: 2, Op.GET_UPVALUE: 1, Op.SET_UPVALUE: 1, Op.CLOSE_FROM: 1,
 }
 
 ASK_KINDS = {None: 0, 'int': 1, 'float': 2}
@@ -91,13 +98,35 @@ class Chunk:
 
 
 class ObjFunction:
+    """Compiled code for a function. At runtime it is always wrapped in a Closure."""
     def __init__(self, name, arity=0):
         self.name = name
         self.arity = arity
+        self.upvalue_count = 0
         self.chunk = Chunk()
 
     def __repr__(self):
         return f"<fn {self.name}>"
+
+
+class Upvalue:
+    """A variable captured by a closure. While the variable's scope is alive the
+    upvalue is 'open' and points at its stack slot; when the scope ends the value
+    is moved into the upvalue ('closed') so the closure keeps it."""
+    __slots__ = ('slot', 'value', 'is_open')
+
+    def __init__(self, slot):
+        self.slot, self.value, self.is_open = slot, None, True
+
+
+class Closure:
+    __slots__ = ('function', 'upvalues')
+
+    def __init__(self, function, upvalues=()):
+        self.function, self.upvalues = function, list(upvalues)
+
+    def __repr__(self):
+        return f"<fn {self.function.name}>"
 
 
 class NativeFunction:
@@ -122,6 +151,14 @@ def disassemble(function, out=print):
         size = OPERAND_SIZE.get(op, 0)
         operand = int.from_bytes(code[ip + 1:ip + 1 + size], 'big') if size else None
         line = f"{ip:04d}  {op.name:<14}"
+        if op == Op.CLOSURE:
+            fn = chunk.constants[operand]
+            nested.append(fn)
+            captures = [('local' if code[ip + 3 + 2 * k] else 'upvalue') + f' {code[ip + 4 + 2 * k]}'
+                        for k in range(fn.upvalue_count)]
+            out(f"{line}{operand:>4}  {fn!r}" + (f"  captures: {', '.join(captures)}" if captures else ""))
+            ip += 1 + size + 2 * fn.upvalue_count
+            continue
         if op in (Op.CONST, Op.DEFINE_GLOBAL, Op.DEFINE_CONST, Op.GET_GLOBAL, Op.SET_GLOBAL, Op.IMPORT):
             value = chunk.constants[operand]
             line += f"{operand:>4}  {value!r}"

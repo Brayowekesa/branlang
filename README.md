@@ -87,8 +87,9 @@ python branlang.py --dis my_program.bl    # print the compiled bytecode instead 
 Set `BRANLANG_ENGINE=vm` to make the VM the default (this also applies to the web IDE).
 
 The bytecode engine lives in `bytecode.py` (opcodes and chunks), `compiler.py` (AST → bytecode)
-and `vm.py` (stack-based VM). It supports everything the AST interpreter does except closures:
-a nested function can't yet read a local variable of the function or block it was defined in.
+and `vm.py` (stack-based VM). It supports everything the AST interpreter does, including
+closures (nested functions that capture and update variables of the scope they were defined in),
+and produces identical output on the whole test suite.
 
 ## Running the Tests
 
