@@ -6,6 +6,7 @@ class TokenType(Enum):
     MEM, CONST, SHOW, FN, RETURN, WHEN, OTHERWISE, LOOP, FOR, FROM, TO, STEP, IMPORT, TRY, CATCH, NULL, BREAK, CONTINUE = 'MEM','CONST','SHOW','FN','RETURN','WHEN','OTHERWISE','LOOP','FOR','FROM','TO','STEP','IMPORT','TRY','CATCH','NULL','BREAK','CONTINUE'
     ASK, ASKINT, ASKFLOAT = 'ASK', 'ASKINT', 'ASKFLOAT'
     TRUE, FALSE, IN = 'TRUE', 'FALSE', 'IN'
+    CLASS, NEW, SELF, SUPER = 'CLASS', 'NEW', 'SELF', 'SUPER'
     ID, NUMBER, STRING = 'ID', 'NUMBER', 'STRING'
     PLUS, MINUS, MUL, DIV, MOD, POW = '+', '-', '*', '/', '%', '**'
     EQ, NE, LT, GT, LTE, GTE, SHOW_SHORTHAND = '==', '!=', '<', '>', '<=', '>=', '>'
@@ -25,6 +26,7 @@ KEYWORDS = {
     'for': TokenType.FOR, 'from': TokenType.FROM, 'to': TokenType.TO, 'step': TokenType.STEP, 'import': TokenType.IMPORT,
     'try': TokenType.TRY, 'catch': TokenType.CATCH, 'ask': TokenType.ASK, 'askInt': TokenType.ASKINT, 'askFloat': TokenType.ASKFLOAT, 'null': TokenType.NULL,
     'true': TokenType.TRUE, 'false': TokenType.FALSE, 'in': TokenType.IN,
+    'class': TokenType.CLASS, 'new': TokenType.NEW, 'self': TokenType.SELF, 'super': TokenType.SUPER,
 }
 
 class Lexer:

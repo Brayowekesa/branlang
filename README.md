@@ -24,6 +24,8 @@ BranLang is a fully-featured scripting language that supports:
     *   `for i from 1 to 10` for classic counting loops.
     *   `for item in my_list` for easy iteration over arrays.
 *   **First-Class Functions:** Define functions with `fn`, accept parameters, and `return` values.
+*   **Closures:** Nested functions capture and update variables from the scope they were defined in.
+*   **Classes:** `class`, `new`, `self`, inheritance with `super`, private `_properties` and operator overloading (see below).
 *   **Built-in Standard Library:** Includes functions for math (`sqrt`, `round`), array manipulation (`len`, `push`, `pop`), and I/O (`show`, `askInt`).
 *   **AI-Augmented Web IDE:**
     *   A beautiful web-based editor with syntax highlighting.
@@ -90,6 +92,34 @@ The bytecode engine lives in `bytecode.py` (opcodes and chunks), `compiler.py` (
 and `vm.py` (stack-based VM). It supports everything the AST interpreter does, including
 closures (nested functions that capture and update variables of the scope they were defined in),
 and produces identical output on the whole test suite.
+
+## Classes
+
+```
+class Vec:
+  fn init(x, y):          # constructor; called by new Vec(...)
+    self.x = x
+    self.y = y
+  fn __add__(other):      # operator overloading
+    return new Vec(self.x + other.x, self.y + other.y)
+  fn __str__():           # used by show() and string concatenation
+    return "Vec(" + self.x + ", " + self.y + ")"
+
+class Vec3(Vec):          # inheritance
+  fn init(x, y, z):
+    super.init(x, y)
+    self.z = z
+
+show(new Vec(1, 2) + new Vec(3, 4))   # Vec(4, 6)
+```
+
+*   Methods are declared with `fn` inside the class and use `self` implicitly (no `self` parameter).
+*   `init` is the constructor; it always returns the new instance.
+*   Properties starting with a single `_` are private: they can only be read or written by code inside a class.
+*   Overloadable operators: `__add__`, `__sub__`, `__mul__`, `__div__`, `__mod__`, `__pow__`, `__neg__`,
+    `__eq__`, `__ne__`, `__lt__`, `__gt__`, `__le__`, `__ge__`, `__str__`, plus `__radd__`, `__rsub__`,
+    `__rmul__` and `__rdiv__` for when the instance is on the right (e.g. `2 * v`).
+*   Classes are only supported by the VM engine (the default), not by `--ast`.
 
 ## Running the Tests
 

@@ -1,0 +1,144 @@
+// vm-only: classes are implemented in the bytecode VM.
+show("--- basics ---")
+class Animal:
+  fn init(name, sound):
+    self.name = name
+    self.sound = sound
+  fn speak():
+    return self.name + " says " + self.sound
+  fn rename(new_name):
+    self.name = new_name
+    return self
+
+mem a = new Animal("Cat", "meow")
+show(a.speak())
+show(a.rename("Tom").speak())
+a.age = 3
+show(a.name, a.age)
+mem speak = a.speak
+show("bound:", speak())
+
+show("--- inheritance and super ---")
+class Dog(Animal):
+  fn init(name):
+    super.init(name, "woof")
+    self.tricks = []
+  fn learn(trick):
+    push(self.tricks, trick)
+  fn speak():
+    return super.speak() + " (knows " + len(self.tricks) + " tricks)"
+
+mem d = new Dog("Rex")
+d.learn("sit")
+d.learn("roll")
+show(d.speak())
+show(d.tricks)
+
+class Puppy(Dog):
+  fn speak():
+    return "tiny " + super.speak()
+show(new Puppy("Bit").speak())
+
+show("--- operator overloading ---")
+class Vec:
+  fn init(x, y):
+    self.x = x
+    self.y = y
+  fn __add__(other):
+    return new Vec(self.x + other.x, self.y + other.y)
+  fn __sub__(other):
+    return new Vec(self.x - other.x, self.y - other.y)
+  fn __mul__(k):
+    return new Vec(self.x * k, self.y * k)
+  fn __rmul__(k):
+    return self * k
+  fn __neg__():
+    return new Vec(-self.x, -self.y)
+  fn __eq__(other):
+    return self.x == other.x && self.y == other.y
+  fn __lt__(other):
+    return self.length2() < other.length2()
+  fn length2():
+    return self.x * self.x + self.y * self.y
+  fn __str__():
+    return "Vec(" + self.x + ", " + self.y + ")"
+
+mem v = new Vec(1, 2)
+mem w = new Vec(3, 4)
+show(v + w, w - v, v * 3, 2 * v, -v)
+show(v == new Vec(1, 2), v != w, v < w, w < v)
+show("as string: " + v)
+show([v, w])
+mem total = new Vec(0, 0)
+for item in [v, w, v]:
+  total = total + item
+show("sum:", total)
+
+show("--- private properties ---")
+class Account:
+  fn init(owner):
+    self.owner = owner
+    self._balance = 0
+  fn deposit(amount):
+    self._balance = self._balance + amount
+  fn balance():
+    return self._balance
+  fn same_balance(other):
+    return self._balance == other._balance
+
+mem acct = new Account("Ana")
+acct.deposit(40)
+acct.deposit(2)
+show(acct.owner, acct.balance())
+show(acct.same_balance(new Account("Bo")))
+try:
+  show(acct._balance)
+catch e:
+  show("caught:", e)
+try:
+  acct._balance = 1000000
+catch e:
+  show("caught:", e)
+
+show("--- closures over self ---")
+class Counter:
+  fn init():
+    self.count = 0
+  fn incrementer(amount):
+    fn inc():
+      self.count = self.count + amount
+      return self.count
+    return inc
+mem c = new Counter()
+mem by5 = c.incrementer(5)
+by5()
+by5()
+show("count:", c.count)
+
+show("--- classes are values ---")
+fn make(cls, arg):
+  return new cls(arg)
+show(make(Dog, "Fido").speak())
+show(Dog, a)
+class Empty:
+  fn describe():
+    return "empty"
+show(new Empty().describe())
+
+show("--- errors ---")
+try:
+  show(a.missing)
+catch e:
+  show("caught:", e)
+try:
+  new Animal("only one")
+catch e:
+  show("caught:", e)
+try:
+  show(v + 1)
+catch e:
+  show("caught:", e)
+try:
+  show(a + a)
+catch e:
+  show("caught:", e)

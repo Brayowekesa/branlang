@@ -16,7 +16,7 @@ BINARY_OPS = {
 # Nodes that leave nothing on the stack; any other statement is an expression
 # whose value is popped.
 STATEMENT_NODES = (VarDecl, ConstDecl, Show, When, Loop, For, ForEach, FnDef, Return,
-                   BreakNode, ContinueNode, ImportNode, TryCatch, Block)
+                   BreakNode, ContinueNode, ImportNode, TryCatch, Block, ClassDef)
 
 MAX_LOCALS = 256
 MAX_U16 = 0xFFFF
@@ -35,6 +35,11 @@ class UpvalueRef:
         self.index, self.is_local, self.is_const = index, is_local, is_const
 
 
+class ClassContext:
+    def __init__(self, name, has_superclass):
+        self.name, self.has_superclass = name, has_superclass
+
+
 class LoopContext:
     def __init__(self, locals_count, try_depth, continue_target=None):
         self.locals_count = locals_count      # locals that exist outside the loop body
@@ -45,13 +50,18 @@ class LoopContext:
 
 
 class Compiler:
-    def __init__(self, name="<script>", arity=0, enclosing=None):
+    def __init__(self, name="<script>", arity=0, enclosing=None, kind='function'):
+        # kind: 'script', 'function', 'method' or 'init' (a class constructor)
         self.function = ObjFunction(name, arity)
         self.enclosing = enclosing
         self.is_script = enclosing is None
+        self.kind = 'script' if self.is_script else kind
         self.scope_depth = 0 if self.is_script else 1
-        # Slot 0 holds the function being executed (the callee).
-        self.locals = [Local("", self.scope_depth)]
+        # Classes being compiled, innermost last; shared by nested compilers.
+        self.classes = enclosing.classes if enclosing else []
+        self.function.in_class = bool(self.classes)
+        # Slot 0 holds the callee; in methods it is the instance, named 'self'.
+        self.locals = [Local("self" if self.kind in ('method', 'init') else "", self.scope_depth)]
         self.upvalues = []
         self.loops = []
         self.try_depth = 0
@@ -120,7 +130,8 @@ class Compiler:
         return len(self.locals) - 1
 
     def resolve_local(self, name):
-        for i in range(len(self.locals) - 1, 0, -1):
+        # Slot 0 is 'self' in methods and unnamed ("") otherwise.
+        for i in range(len(self.locals) - 1, -1, -1):
             if self.locals[i].name == name:
                 return i
         return -1
@@ -250,15 +261,18 @@ class Compiler:
         self.declare_variable(node.name_node.name, is_const=True)
 
     def visit_VarAccess(self, node):
-        slot = self.resolve_local(node.name)
+        self.load_variable(node.name)
+
+    def load_variable(self, name):
+        slot = self.resolve_local(name)
         if slot != -1:
             self.emit(Op.GET_LOCAL, slot)
             return
-        index = self.resolve_upvalue(node.name)
+        index = self.resolve_upvalue(name)
         if index != -1:
             self.emit(Op.GET_UPVALUE, index)
         else:
-            self.emit_u16(Op.GET_GLOBAL, self.name_constant(node.name))
+            self.emit_u16(Op.GET_GLOBAL, self.name_constant(name))
 
     def visit_VarAssign(self, node):
         name = node.name_node.name
@@ -427,28 +441,88 @@ class Compiler:
     # ---- functions ---------------------------------------------------
     def visit_FnDef(self, node):
         name = node.name_node.name
-        if len(node.params) > 255:
-            raise CompileError("A function can take at most 255 parameters.")
         # Declare the local before compiling the body, so a nested function can
         # call itself (recursion) through an upvalue. Globals are found by name.
         redeclared = self.scope_depth > 0 and self.find_in_current_scope(name) != -1
         if self.scope_depth > 0 and not redeclared:
             self.add_local(name)
 
-        fn_compiler = Compiler(name, len(node.params), enclosing=self)
-        for param in node.params:
-            fn_compiler.add_local(param.name)
-        fn_compiler.visit(node.body)
-        fn_compiler.emit(Op.NULL, Op.RETURN)  # implicit 'return null'
-
-        self.emit_u16(Op.CLOSURE, self.chunk.add_constant(fn_compiler.function))
-        for up in fn_compiler.upvalues:
-            self.emit(1 if up.is_local else 0, up.index)
+        self.compile_function(node, 'function')
 
         if self.scope_depth == 0:
             self.emit_u16(Op.DEFINE_GLOBAL, self.name_constant(name))
         elif redeclared:
             self.declare_variable(name)  # overwrite the existing local of the same name
+
+    def compile_function(self, node, kind):
+        """Compile a function or method body and emit a CLOSURE that pushes it."""
+        if len(node.params) > 255:
+            raise CompileError("A function can take at most 255 parameters.")
+        fn_compiler = Compiler(node.name_node.name, len(node.params), enclosing=self, kind=kind)
+        for param in node.params:
+            fn_compiler.add_local(param.name)
+        fn_compiler.visit(node.body)
+        if kind == 'init':
+            fn_compiler.emit(Op.GET_LOCAL, 0, Op.RETURN)  # a constructor returns the instance
+        else:
+            fn_compiler.emit(Op.NULL, Op.RETURN)  # implicit 'return null'
+
+        self.emit_u16(Op.CLOSURE, self.chunk.add_constant(fn_compiler.function))
+        for up in fn_compiler.upvalues:
+            self.emit(1 if up.is_local else 0, up.index)
+
+    # ---- classes -----------------------------------------------------
+    def visit_ClassDef(self, node):
+        name = node.name_node.name
+        redeclared = self.scope_depth > 0 and self.find_in_current_scope(name) != -1
+        if self.scope_depth > 0 and not redeclared:
+            self.add_local(name)
+        self.emit_u16(Op.CLASS, self.name_constant(name))
+        if self.scope_depth == 0:
+            self.emit_u16(Op.DEFINE_GLOBAL, self.name_constant(name))
+        elif redeclared:
+            self.declare_variable(name)
+
+        superclass = node.superclass
+        self.classes.append(ClassContext(name, superclass is not None))
+        if superclass is not None:
+            if superclass.name == name:
+                raise CompileError(f"Class '{name}' can't inherit from itself.")
+            # A hidden scope holds the superclass as 'super' for the methods to capture.
+            self.begin_scope()
+            self.load_variable(superclass.name)
+            self.add_local("super")
+            self.load_variable(name)
+            self.emit(Op.INHERIT)
+
+        self.load_variable(name)
+        seen = set()
+        for method in node.methods:
+            method_name = method.name_node.name
+            if method_name in seen:
+                raise CompileError(f"Method '{method_name}' is defined twice in class '{name}'.")
+            seen.add(method_name)
+            self.compile_function(method, 'init' if method_name == 'init' else 'method')
+            self.emit_u16(Op.METHOD, self.name_constant(method_name))
+        self.emit(Op.POP)
+
+        if superclass is not None:
+            self.end_scope()
+        self.classes.pop()
+
+    def visit_SelfNode(self, node):
+        if not self.classes:
+            raise CompileError("Cannot use 'self' outside of a class method.")
+        self.load_variable("self")
+
+    def visit_SuperAccess(self, node):
+        if not self.classes:
+            raise CompileError("Cannot use 'super' outside of a class method.")
+        if not self.classes[-1].has_superclass:
+            raise CompileError(f"Cannot use 'super' in class '{self.classes[-1].name}', which has no superclass.")
+        self.load_variable("self")
+        self.load_variable("super")
+        self.emit_u16(Op.GET_SUPER, self.name_constant(node.method))
 
     def visit_FnCall(self, node):
         if len(node.args) > 255:
@@ -464,5 +538,7 @@ class Compiler:
             # The interpreter only fails when the return is actually reached.
             self.emit_raise("Return statement used outside of a function.")
             return
+        if self.kind == 'init':
+            raise CompileError("Cannot return a value from 'init'; it always returns the new instance.")
         self.visit(node.expr)
         self.emit(Op.RETURN)

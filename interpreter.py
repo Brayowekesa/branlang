@@ -107,7 +107,10 @@ class Interpreter:
     def visit(self, node):
         method_name = f'visit_{type(node).__name__}'; visitor = getattr(self, method_name, self.generic_visit)
         return visitor(node)
-    def generic_visit(self, node): raise InterpreterError(f'No visit_{type(node).__name__} method')
+    def generic_visit(self, node):
+        if type(node).__name__ in ('ClassDef', 'SelfNode', 'SuperAccess'):
+            raise InterpreterError("Classes are only supported by the VM engine (run without --ast).")
+        raise InterpreterError(f'No visit_{type(node).__name__} method')
     def visit_Block(self, node): return self.execute_block(node, Environment(enclosing=self.globals))
     def visit_BinOp(self, node):
         left, right = self.visit(node.left), self.visit(node.right); op = node.op.type

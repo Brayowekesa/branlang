@@ -59,6 +59,12 @@ class TryCatch(AST):
     def __init__(self, try_block, error_var_node, catch_block):
         self.try_block, self.error_var_node, self.catch_block = try_block, error_var_node, catch_block
 class BreakNode(AST): pass
+class ClassDef(AST):
+    def __init__(self, name_node, superclass, methods): self.name_node, self.superclass, self.methods = name_node, superclass, methods
+class SelfNode(AST):
+    def __init__(self, token): self.token = token
+class SuperAccess(AST):
+    def __init__(self, token, method): self.token, self.method = token, method
 class ContinueNode(AST): pass
 
 class Parser:
@@ -113,6 +119,7 @@ class Parser:
         if token_type == TokenType.BREAK: self.eat(TokenType.BREAK); return BreakNode()
         if token_type == TokenType.CONTINUE: self.eat(TokenType.CONTINUE); return ContinueNode()
         if token_type == TokenType.FN: return self.fn_definition()
+        if token_type == TokenType.CLASS: return self.class_definition()
         if token_type == TokenType.RETURN: self.eat(TokenType.RETURN); return Return(self.expression())
         expr = self.expression()
         if isinstance(expr, (VarAssign, MemberAssign, FnCall)): return expr
@@ -169,6 +176,19 @@ class Parser:
             if self.current_token.type == TokenType.STEP: self.eat(TokenType.STEP); step = self.expression()
             body = self.block(); return For(var_name_node, start, end, step, body)
         else: self.error("Expected 'in' or 'from' after for loop variable.")
+    def class_definition(self):
+        self.eat(TokenType.CLASS)
+        name_node = VarAccess(self.current_token); self.eat(TokenType.ID)
+        superclass = None
+        if self.current_token.type == TokenType.LPAREN:
+            self.eat(TokenType.LPAREN)
+            superclass = VarAccess(self.current_token); self.eat(TokenType.ID)
+            self.eat(TokenType.RPAREN)
+        body = self.block()
+        for stmt in body.statements:
+            if not isinstance(stmt, FnDef):
+                raise ParserError(f"Only methods (fn ...) are allowed in the body of class '{name_node.name}'.")
+        return ClassDef(name_node, superclass, body.statements)
     def fn_definition(self):
         self.eat(TokenType.FN); name_node = VarAccess(self.current_token); self.eat(TokenType.ID); self.eat(TokenType.LPAREN); params = []
         if self.current_token.type == TokenType.ID:
@@ -224,13 +244,7 @@ class Parser:
         node = self.primary()
         while True:
             if self.current_token.type == TokenType.LPAREN:
-                self.eat(TokenType.LPAREN); args = [];
-                if self.current_token.type != TokenType.RPAREN:
-                    while self.current_token.type != TokenType.RPAREN:
-                        if self.current_token.type == TokenType.COMMA: self.eat(TokenType.COMMA) # Skip extra/trailing commas
-                        else: args.append(self.expression())
-                        if self.current_token.type == TokenType.RPAREN: break # Handle trailing comma
-                self.eat(TokenType.RPAREN); node = FnCall(callee=node, args=args)
+                node = FnCall(callee=node, args=self.call_arguments())
             elif self.current_token.type == TokenType.LBRACKET:
                 self.eat(TokenType.LBRACKET); index_expr = self.expression(); self.eat(TokenType.RBRACKET)
                 node = MemberAccess(callee=node, member=index_expr)
@@ -240,8 +254,31 @@ class Parser:
                 node = MemberAccess(callee=node, member=member_as_string_node)
             else: break
         return node
+    def call_arguments(self):
+        self.eat(TokenType.LPAREN); args = []
+        if self.current_token.type != TokenType.RPAREN:
+            while self.current_token.type != TokenType.RPAREN:
+                if self.current_token.type == TokenType.COMMA: self.eat(TokenType.COMMA) # Skip extra/trailing commas
+                else: args.append(self.expression())
+                if self.current_token.type == TokenType.RPAREN: break # Handle trailing comma
+        self.eat(TokenType.RPAREN)
+        return args
     def primary(self):
         token = self.current_token
+        if token.type == TokenType.SELF: self.advance(); return SelfNode(token)
+        if token.type == TokenType.SUPER:
+            self.advance(); self.eat(TokenType.DOT)
+            method_token = self.current_token; self.eat(TokenType.ID)
+            return SuperAccess(token, method_token.value)
+        if token.type == TokenType.NEW:
+            # 'new' Name(args) or 'new' module.Name(args); further postfix ops apply to the instance.
+            self.advance()
+            target = VarAccess(self.current_token); self.eat(TokenType.ID)
+            while self.current_token.type == TokenType.DOT:
+                self.eat(TokenType.DOT); member_token = self.current_token; self.eat(TokenType.ID)
+                target = MemberAccess(target, String(Token(TokenType.STRING, member_token.value)))
+            if self.current_token.type != TokenType.LPAREN: self.error("Expected '(' after the class name in 'new'.")
+            return FnCall(callee=target, args=self.call_arguments())
         if token.type == TokenType.LBRACE:
             self.eat(TokenType.LBRACE)
             pairs = {}

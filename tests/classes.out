@@ -1,0 +1,31 @@
+--- basics ---
+Cat says meow
+Tom says meow
+Tom 3
+bound: Tom says meow
+--- inheritance and super ---
+Rex says woof (knows 2 tricks)
+['sit', 'roll']
+tiny Bit says woof (knows 0 tricks)
+--- operator overloading ---
+Vec(4, 6) Vec(2, 2) Vec(3, 6) Vec(2, 4) Vec(-1, -2)
+True True True False
+as string: Vec(1, 2)
+[Vec(1, 2), Vec(3, 4)]
+sum: Vec(5, 8)
+--- private properties ---
+Ana 42
+False
+caught: Cannot access private property '_balance' outside of a class.
+caught: Cannot access private property '_balance' outside of a class.
+--- closures over self ---
+count: 10
+--- classes are values ---
+Fido says woof (knows 0 tricks)
+<class Dog> <Animal instance>
+empty
+--- errors ---
+caught: 'Animal' instance has no property 'missing'.
+caught: Expected 2 arguments but got 1.
+caught: Can only access members of arrays, objects, strings and class instances.
+caught: Unsupported operand for +: 'Animal' instance has no __add__ method.

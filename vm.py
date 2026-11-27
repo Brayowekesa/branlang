@@ -16,7 +16,7 @@ _OPCODE_VALUES = tuple(int(Op[name]) for name in (
     'JUMP_IF_FALSE', 'LOOP', 'LT', 'LTE', 'MOD', 'MUL', 'NE', 'NEGATE', 'NULL', 'OR', 'POP',
     'POP_TRY', 'POW', 'PRINT_N', 'RAISE', 'RANGE_COND', 'RETURN', 'SETUP_TRY', 'SET_GLOBAL',
     'SET_INDEX', 'SET_LOCAL', 'SUB', 'TRUE', 'CLOSURE', 'GET_UPVALUE', 'SET_UPVALUE',
-    'CLOSE_UPVALUE', 'CLOSE_FROM'))
+    'CLOSE_UPVALUE', 'CLOSE_FROM', 'CLASS', 'INHERIT', 'METHOD', 'GET_SUPER'))
 
 
 class CallFrame:
@@ -31,6 +31,108 @@ class TryHandler:
 
     def __init__(self, frame_count, stack_len, handler_ip):
         self.frame_count, self.stack_len, self.handler_ip = frame_count, stack_len, handler_ip
+
+
+# VMs currently running, innermost last. Operator overloading is triggered by
+# Python operators inside the dispatch loop, so the instance needs a way back
+# into the VM that is executing it.
+_ACTIVE_VMS = []
+
+BINARY_DUNDERS = {
+    '__add__': ('+', '__radd__'), '__sub__': ('-', '__rsub__'), '__mul__': ('*', '__rmul__'),
+    '__div__': ('/', '__rdiv__'), '__mod__': ('%', None), '__pow__': ('**', None),
+    '__lt__': ('<', None), '__gt__': ('>', None), '__le__': ('<=', None), '__ge__': ('>=', None),
+}
+
+
+class ObjClass:
+    def __init__(self, name):
+        self.name, self.methods, self.superclass = name, {}, None
+
+    def __repr__(self):
+        return f"<class {self.name}>"
+
+
+class ObjBoundMethod:
+    """A method looked up on an instance (or via super), remembering its receiver."""
+    __slots__ = ('receiver', 'method')
+
+    def __init__(self, receiver, method):
+        self.receiver, self.method = receiver, method
+
+    def __repr__(self):
+        return f"<fn {self.method.function.name}>"
+
+
+class ObjInstance:
+    """An instance of a BranLang class. Python operators on it dispatch to the
+    class's __add__, __eq__, __str__, ... methods, run by the active VM."""
+    __slots__ = ('klass', 'fields')
+
+    def __init__(self, klass):
+        self.klass, self.fields = klass, {}
+
+    def _call(self, name, args):
+        return _ACTIVE_VMS[-1].call_method(self, self.klass.methods[name], args)
+
+    def _binary(self, name, other):
+        if name in self.klass.methods:
+            return self._call(name, [other])
+        symbol, reflected = BINARY_DUNDERS[name]
+        if reflected and isinstance(other, ObjInstance) and reflected in other.klass.methods:
+            return other._call(reflected, [self])
+        raise VMError(f"Unsupported operand for {symbol}: '{self.klass.name}' instance has no {name} method.")
+
+    def _reflected(self, name, other):
+        symbol = {'__radd__': '+', '__rsub__': '-', '__rmul__': '*', '__rdiv__': '/'}[name]
+        if name in self.klass.methods:
+            return self._call(name, [other])
+        raise VMError(f"Unsupported operand for {symbol}: '{self.klass.name}' instance has no {name} method.")
+
+    def __add__(self, other): return self._binary('__add__', other)
+    def __sub__(self, other): return self._binary('__sub__', other)
+    def __mul__(self, other): return self._binary('__mul__', other)
+    def __truediv__(self, other): return self._binary('__div__', other)
+    def __mod__(self, other): return self._binary('__mod__', other)
+    def __pow__(self, other): return self._binary('__pow__', other)
+    def __lt__(self, other): return self._binary('__lt__', other)
+    def __gt__(self, other): return self._binary('__gt__', other)
+    def __le__(self, other): return self._binary('__le__', other)
+    def __ge__(self, other): return self._binary('__ge__', other)
+    def __radd__(self, other): return self._reflected('__radd__', other)
+    def __rsub__(self, other): return self._reflected('__rsub__', other)
+    def __rmul__(self, other): return self._reflected('__rmul__', other)
+    def __rtruediv__(self, other): return self._reflected('__rdiv__', other)
+
+    def __neg__(self):
+        if '__neg__' in self.klass.methods:
+            return self._call('__neg__', [])
+        raise VMError(f"Unsupported operand for unary -: '{self.klass.name}' instance has no __neg__ method.")
+
+    def __eq__(self, other):
+        if '__eq__' in self.klass.methods:
+            return self._call('__eq__', [other])
+        return self is other
+
+    def __ne__(self, other):
+        if '__ne__' in self.klass.methods:
+            return self._call('__ne__', [other])
+        if '__eq__' in self.klass.methods:
+            return not self._call('__eq__', [other])
+        return self is not other
+
+    __hash__ = object.__hash__
+
+    def __str__(self):
+        if '__str__' in self.klass.methods:
+            return str(self._call('__str__', []))
+        return f"<{self.klass.name} instance>"
+
+    __repr__ = __str__
+
+
+def _is_private(key):
+    return key.startswith('_') and not (key.startswith('__') and key.endswith('__'))
 
 
 class InputState:
@@ -127,12 +229,33 @@ class VM:
             self.const_globals.add(name)
 
     def run(self):
+        _ACTIVE_VMS.append(self)
+        try:
+            self._run_frames(0)
+        finally:
+            _ACTIVE_VMS.pop()
+
+    def call_method(self, receiver, closure, args):
+        """Call a BranLang method from Python (operator overloading, __str__)."""
+        if len(args) != closure.function.arity:
+            raise VMError(f"Expected {closure.function.arity} arguments but got {len(args)}.")
+        if len(self.frames) >= MAX_FRAMES:
+            raise VMError("Maximum recursion depth exceeded.")
+        base = len(self.stack)
+        self.stack.append(receiver)
+        self.stack.extend(args)
+        stop_depth = len(self.frames)
+        self.frames.append(CallFrame(closure, base))
+        return self._run_frames(stop_depth)
+
+    def _run_frames(self, stop_depth):
+        """Execute until the frame count drops back to stop_depth (0: until HALT),
+        sending errors to try handlers opened above stop_depth."""
         while True:
             try:
-                self._execute()
-                return
+                return self._execute(stop_depth)
             except BranError as e:
-                if not self.handlers:
+                if not self.handlers or self.handlers[-1].frame_count <= stop_depth:
                     raise
                 # Unwind to the innermost try block and jump to its catch handler.
                 handler = self.handlers.pop()
@@ -142,14 +265,14 @@ class VM:
                 self.stack.append(str(e))
                 self.frames[-1].ip = handler.handler_ip
 
-    def _execute(self):
+    def _execute(self, stop_depth=0):
         # Opcodes as plain-int locals: much faster to compare than IntEnum members.
         (ADD, AND, ASK, BUILD_LIST, BUILD_MAP, CALL, COALESCE, CONST, DEFINE_CONST,
         DEFINE_GLOBAL, DIV, EQ, FALSE, FOR_ITER, GET_GLOBAL, GET_INDEX, GET_ITER, GET_LOCAL,
         GT, GTE, HALT, IMPORT, JUMP, JUMP_IF_FALSE, LOOP, LT, LTE, MOD, MUL, NE, NEGATE, NULL,
         OR, POP, POP_TRY, POW, PRINT_N, RAISE, RANGE_COND, RETURN, SETUP_TRY, SET_GLOBAL,
         SET_INDEX, SET_LOCAL, SUB, TRUE, CLOSURE, GET_UPVALUE, SET_UPVALUE,
-        CLOSE_UPVALUE, CLOSE_FROM) = _OPCODE_VALUES
+        CLOSE_UPVALUE, CLOSE_FROM, CLASS, INHERIT, METHOD, GET_SUPER) = _OPCODE_VALUES
         stack, frames, globals_ = self.stack, self.frames, self.globals
         frame = frames[-1]
         code, constants = frame.function.chunk.code, frame.function.chunk.constants
@@ -216,24 +339,36 @@ class VM:
                 call_ip = ip - 1
                 argc = code[ip]; ip += 1
                 callee = stack[-1 - argc]
-                if isinstance(callee, Closure):
-                    if argc != callee.function.arity:
-                        raise VMError(f"Expected {callee.function.arity} arguments but got {argc}.")
-                    if len(frames) >= MAX_FRAMES:
-                        raise VMError("Maximum recursion depth exceeded.")
-                    frame.ip = ip
-                    frame = CallFrame(callee, len(stack) - argc - 1)
-                    frames.append(frame)
-                    ip = 0
-                    chunk = callee.function.chunk
-                    code, constants, base, upvalues = chunk.code, chunk.constants, frame.base, callee.upvalues
-                elif isinstance(callee, (NativeFunction, BoundMethod)):
-                    args = stack[len(stack) - argc:]
-                    del stack[len(stack) - argc - 1:]
-                    stack.append(callee(args))
-                else:
-                    name = frame.function.chunk.call_names.get(call_ip, 'expression')
-                    raise VMError(f"'{name}' is not a callable function.")
+                if callee.__class__ is not Closure:
+                    if isinstance(callee, (NativeFunction, BoundMethod)):
+                        args = stack[len(stack) - argc:]
+                        del stack[len(stack) - argc - 1:]
+                        stack.append(callee(args))
+                        continue
+                    if isinstance(callee, ObjBoundMethod):
+                        stack[-1 - argc] = callee.receiver
+                        callee = callee.method
+                    elif isinstance(callee, ObjClass):
+                        stack[-1 - argc] = ObjInstance(callee)
+                        init = callee.methods.get('init')
+                        if init is None:
+                            if argc:
+                                raise VMError(f"Expected 0 arguments but got {argc}.")
+                            continue
+                        callee = init
+                    else:
+                        name = frame.function.chunk.call_names.get(call_ip, 'expression')
+                        raise VMError(f"'{name}' is not a callable function.")
+                if argc != callee.function.arity:
+                    raise VMError(f"Expected {callee.function.arity} arguments but got {argc}.")
+                if len(frames) >= MAX_FRAMES:
+                    raise VMError("Maximum recursion depth exceeded.")
+                frame.ip = ip
+                frame = CallFrame(callee, len(stack) - argc - 1)
+                frames.append(frame)
+                ip = 0
+                chunk = callee.function.chunk
+                code, constants, base, upvalues = chunk.code, chunk.constants, frame.base, callee.upvalues
             elif op == RETURN:
                 result = stack.pop()
                 frames.pop()
@@ -244,6 +379,8 @@ class VM:
                 # Drop try handlers that belonged to the frame we just left.
                 while self.handlers and self.handlers[-1].frame_count > len(frames):
                     self.handlers.pop()
+                if len(frames) == stop_depth:
+                    return stack.pop()
                 frame = frames[-1]
                 code, constants, base, ip = frame.function.chunk.code, frame.function.chunk.constants, frame.base, frame.ip
                 upvalues = frame.closure.upvalues
@@ -257,7 +394,7 @@ class VM:
                 b = stack.pop(); stack[-1] = stack[-1] * b
             elif op == DIV:
                 b = stack.pop()
-                if b == 0: raise VMError("Division by zero.")
+                if b.__class__ in (int, float, bool) and b == 0: raise VMError("Division by zero.")
                 stack[-1] = stack[-1] / b
             elif op == MOD:
                 b = stack.pop(); stack[-1] = stack[-1] % b
@@ -317,11 +454,30 @@ class VM:
                 stack.append({items[i]: items[i + 1] for i in range(0, len(items), 2)})
             elif op == GET_INDEX:
                 key = stack.pop(); obj = stack.pop()
-                stack.append(self._get_member(obj, key))
+                stack.append(self._get_member(obj, key, frame.function.in_class))
             elif op == SET_INDEX:
                 value = stack.pop(); key = stack.pop(); obj = stack.pop()
-                self._set_member(obj, key, value)
+                self._set_member(obj, key, value, frame.function.in_class)
                 stack.append(value)
+            elif op == CLASS:
+                stack.append(ObjClass(constants[(code[ip] << 8) | code[ip + 1]])); ip += 2
+            elif op == INHERIT:
+                klass = stack.pop(); superclass = stack[-1]
+                if not isinstance(superclass, ObjClass):
+                    raise VMError(f"Class '{klass.name}' can only inherit from a class.")
+                klass.methods.update(superclass.methods)
+                klass.superclass = superclass
+            elif op == METHOD:
+                name = constants[(code[ip] << 8) | code[ip + 1]]; ip += 2
+                method = stack.pop()
+                stack[-1].methods[name] = method
+            elif op == GET_SUPER:
+                name = constants[(code[ip] << 8) | code[ip + 1]]; ip += 2
+                superclass = stack.pop(); instance = stack.pop()
+                method = superclass.methods.get(name)
+                if method is None:
+                    raise VMError(f"Superclass '{superclass.name}' has no method '{name}'.")
+                stack.append(ObjBoundMethod(instance, method))
 
             elif op == PRINT_N:
                 count = code[ip]; ip += 1
@@ -361,7 +517,15 @@ class VM:
             up.value, up.is_open = self.stack[slot], False
 
     @staticmethod
-    def _get_member(obj, key):
+    def _get_member(obj, key, in_class):
+        if isinstance(obj, ObjInstance):
+            if not isinstance(key, str): raise VMError("Property name must be a string.")
+            if not in_class and _is_private(key):
+                raise VMError(f"Cannot access private property '{key}' outside of a class.")
+            if key in obj.fields: return obj.fields[key]
+            method = obj.klass.methods.get(key)
+            if method is not None: return ObjBoundMethod(obj, method)
+            raise VMError(f"'{obj.klass.name}' instance has no property '{key}'.")
         if isinstance(obj, list):
             if not isinstance(key, int): raise VMError("Array index must be an integer.")
             if not (0 <= key < len(obj)): raise VMError(f"Array index out of bounds: {key}")
@@ -371,11 +535,18 @@ class VM:
             return obj.get(key)
         if isinstance(obj, str):
             return BoundMethod(obj, key)
-        raise VMError("Can only access members of arrays, objects, and strings.")
+        if isinstance(obj, ObjClass):
+            raise VMError(f"Use 'new {obj.name}(...)' to create an instance before accessing '{key}'.")
+        raise VMError("Can only access members of arrays, objects, strings and class instances.")
 
     @staticmethod
-    def _set_member(obj, key, value):
-        if isinstance(obj, dict):
+    def _set_member(obj, key, value, in_class):
+        if isinstance(obj, ObjInstance):
+            if not isinstance(key, str): raise VMError("Property name must be a string.")
+            if not in_class and _is_private(key):
+                raise VMError(f"Cannot access private property '{key}' outside of a class.")
+            obj.fields[key] = value
+        elif isinstance(obj, dict):
             if not isinstance(key, str): raise VMError("Object key must be a string.")
             obj[key] = value
         elif isinstance(obj, list):
@@ -383,7 +554,7 @@ class VM:
             if not (0 <= key < len(obj)): raise VMError(f"Array index out of bounds: {key}")
             obj[key] = value
         else:
-            raise VMError("Can only assign to members of arrays and objects.")
+            raise VMError("Can only assign to members of arrays, objects and class instances.")
 
     def _ask(self, prompt, kind):
         text = self.input.read(prompt if prompt is not None else "")

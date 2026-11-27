@@ -62,6 +62,11 @@ class Op(IntEnum):
     SET_UPVALUE = 48    # u8 upvalue index
     CLOSE_UPVALUE = 49  # move the captured local on top of the stack into its upvalue, pop it
     CLOSE_FROM = 50     # u8 slot: close upvalues for this slot and above (before break/continue)
+    # Classes
+    CLASS = 51          # u16 name constant: push a new class
+    INHERIT = 52        # pop subclass, copy methods from the superclass below it
+    METHOD = 53         # u16 name constant: pop a closure, add it to the class below it
+    GET_SUPER = 54      # u16 name constant: pop superclass and instance, push bound method
 
 
 # Size in bytes of each opcode's operand (opcodes not listed take none).
@@ -71,6 +76,7 @@ OPERAND_SIZE = {
     Op.JUMP: 2, Op.JUMP_IF_FALSE: 2, Op.LOOP: 2, Op.FOR_ITER: 2, Op.SETUP_TRY: 2,
     Op.CALL: 1, Op.BUILD_LIST: 2, Op.BUILD_MAP: 2, Op.PRINT_N: 1, Op.ASK: 1, Op.IMPORT: 2,
     Op.CLOSURE: 2, Op.GET_UPVALUE: 1, Op.SET_UPVALUE: 1, Op.CLOSE_FROM: 1,
+    Op.CLASS: 2, Op.METHOD: 2, Op.GET_SUPER: 2,
 }
 
 ASK_KINDS = {None: 0, 'int': 1, 'float': 2}
@@ -103,6 +109,7 @@ class ObjFunction:
         self.name = name
         self.arity = arity
         self.upvalue_count = 0
+        self.in_class = False  # compiled inside a class body: may use private _properties
         self.chunk = Chunk()
 
     def __repr__(self):
@@ -159,7 +166,8 @@ def disassemble(function, out=print):
             out(f"{line}{operand:>4}  {fn!r}" + (f"  captures: {', '.join(captures)}" if captures else ""))
             ip += 1 + size + 2 * fn.upvalue_count
             continue
-        if op in (Op.CONST, Op.DEFINE_GLOBAL, Op.DEFINE_CONST, Op.GET_GLOBAL, Op.SET_GLOBAL, Op.IMPORT):
+        if op in (Op.CONST, Op.DEFINE_GLOBAL, Op.DEFINE_CONST, Op.GET_GLOBAL, Op.SET_GLOBAL, Op.IMPORT,
+                  Op.CLASS, Op.METHOD, Op.GET_SUPER):
             value = chunk.constants[operand]
             line += f"{operand:>4}  {value!r}"
             if isinstance(value, ObjFunction):
